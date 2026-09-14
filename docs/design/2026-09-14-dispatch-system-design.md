@@ -1,10 +1,11 @@
 # dispatch — system design
 
-Status: draft, first pass. Written 2026-09-14 after a brainstorming session
-covering role targeting, project shape, cost planning, and naming.
-Architecture decisions below were checked against current (2026-09) public
-material before being written down — sources are cited inline, per this
-project's standing "search before deciding" convention.
+Status: draft, second pass (Phase 7 + Rust serving layer added). Written
+2026-09-14 after a brainstorming session covering role targeting, project
+shape, cost planning, and naming. Architecture decisions below were checked
+against current (2026-09) public material before being written down —
+sources are cited inline, per this project's standing "search before
+deciding" convention.
 
 ## 1. Purpose
 
@@ -52,20 +53,25 @@ flowchart LR
 
     subgraph custom["Custom (this project's actual work)"]
         K["Grouped-GEMM expert kernel\n[Triton, Phase 1]"]
-        S["Serving loop\n[wraps the kernel + router]"]
+        RT["Rust router\n[HTTP/gRPC, batching, Phase 7]"]
+        MS["Python model server\n[runs router+kernel, gRPC, Phase 7]"]
     end
 
-    R --> K --> S
-    D <-.-> S
+    R --> K --> MS
+    RT -->|gRPC| MS
+    D <-.-> MS
     Q -.-> K
-    B -->|drives requests against| S
+    B -->|drives requests against| RT
     B -->|drives requests against| V["vLLM / SGLang\n(comparison baseline)"]
 ```
 
 The router (top-k expert selection) and the cross-GPU communication layer
 are both solved problems with production-grade open implementations — the
 differentiated work is the grouped-GEMM kernel and the serving system built
-around it, not reinventing either of those.
+around it, not reinventing either of those. Phases 0-6 drive the kernel and
+model directly from lightweight Python test/benchmark harnesses; the
+Rust-router/Python-model-server split (§8) is Phase 7's contribution, once
+there's a real service worth productionizing.
 
 ## 4. Kernel scope
 
@@ -106,7 +112,7 @@ does not get DeepEP's real performance. This directly affects Phase 3's
 cost: it needs a short, deliberate burst on a dedicated NVLink/SXM
 multi-GPU rental (RunPod Secure Cloud or Lambda, not marketplace spot),
 priced and time-boxed as its own line item — not assumed to fall out of
-the same cheap instances the rest of the project uses. See §8 cost plan.
+the same cheap instances the rest of the project uses. See §9 cost plan.
 
 **Noted for Phase 3, not decided now:** UCCL-EP (a newer, cloud-flexible
 expert-parallelism library surfaced in the same research pass) may relax
@@ -138,17 +144,58 @@ requirement, not a nice-to-have.
 | 4 | Disaggregated prefill/decode across separate GPU pools | Reuses phase 3's NVLink/SXM rental where possible; shorter burst |
 | 5 | Quantization + speculative decoding layered on top (existing tooling) | Single/dual GPU |
 | 6 | Final benchmark vs. vLLM/SGLang, standard tool, same hardware/model | Whatever phases 3-4's hardware already required, reused |
+| 7 | Productionization: Rust router + Docker + observability + a K8s deployment, demoed once | Small — a single GPU (or even CPU for the router alone) is enough; K8s demoed once and torn down, not run continuously |
 
-## 8. Cost plan
+## 8. Phase 7: productionization
+
+Added after checking real inference-engineer job postings (national) and
+the Atlanta metro market specifically — both name gaps this design didn't
+originally cover: containerization, cloud/K8s deployment, and live
+observability against SLA-style metrics (TTFT, tokens/sec) rather than a
+one-shot benchmark number.
+
+**Rust router, Python model server — the TGI architecture, not invented
+here.** Checked directly against Hugging Face's own documented
+`text-generation-inference` architecture: a three-tier split of Launcher,
+Router (Rust — HTTP-facing, request validation, queuing, continuous
+batching), and Server (Python — loads the model, runs inference), talking
+over gRPC. Dispatch follows the same split rather than a novel one:
+
+- **Router (Rust)** — HTTP/gRPC-facing, request queuing and batching,
+  Prometheus metrics exposition (TTFT, inter-token latency, queue depth,
+  requests/sec). This is deliberately the "last mile" layer 2026 production
+  practice actually puts in Rust (no GIL, no interpreter overhead,
+  deterministic latency) — see ADR-0003 for the full reasoning and what
+  was deliberately *not* rewritten in Rust.
+- **Model server (Python)** — unchanged from phases 0-6: loads
+  DeepSeekMoE-16B, runs the router/gating + the custom Triton kernel +
+  DeepEP where applicable, serves gRPC requests from the Rust router.
+
+**Docker.** Both processes containerized; a `docker compose` (or two
+Dockerfiles) brings up router + model server together for local
+verification before any cloud deployment.
+
+**Observability.** Router-exposed Prometheus metrics, a Grafana dashboard
+showing TTFT/ITL/throughput/queue-depth live during a benchmark run —
+turns Phase 6's one-shot benchmark numbers into something that looks like
+a monitored service, not just a script's stdout.
+
+**Kubernetes.** A deployment manifest (or a small Helm chart), applied for
+real against a real cluster once, health-endpoint verified, screenshotted,
+torn down immediately — the same "apply it for real, prove it, tear down"
+pattern Canopica used for its Azure proof, not a service left running.
+
+## 9. Cost plan
 
 Recap from the brainstorming session, now tied to real phases: marketplace/
 spot instances for phases 0, 1, 2, 5; a dedicated NVLink/SXM multi-GPU
 rental for the short phases 3-4 bursts specifically (not assumed to be free
-or already covered by the cheap tier). Budget cap set before the first
-rental. Every run's cost measured and logged to `docs/findings/`, never
-estimated. Full discipline in CLAUDE.md's Cost discipline section.
+or already covered by the cheap tier); a single cheap GPU (or CPU-only for
+the router itself) for phase 7's Docker/K8s demo. Budget cap set before the
+first rental. Every run's cost measured and logged to `docs/findings/`,
+never estimated. Full discipline in CLAUDE.md's Cost discipline section.
 
-## 9. What "done" looks like
+## 10. What "done" looks like
 
 - Kernel numerically correct within a stated tolerance vs. the Phase 0
   reference, at every optimization step.
@@ -157,26 +204,39 @@ estimated. Full discipline in CLAUDE.md's Cost discipline section.
 - Multi-GPU expert-parallel serving demonstrably working, benchmarked
   against single-GPU.
 - A same-hardware, same-model comparison table against vLLM and/or SGLang.
+- A containerized, K8s-deployable service with live observability, proven
+  by one real deploy-verify-teardown cycle.
 - (Stretch, not required for "done") an upstream PR opened; bonus if
   merged.
 
-## 10. Explicitly out of scope
+## 11. Explicitly out of scope
 
 - Training or fine-tuning the model itself.
 - Supporting arbitrary models beyond DeepSeekMoE-16B in the first pass —
   generalizing the kernel to other MoE architectures is a possible later
-  phase, not a Phase 0-6 requirement.
-- A production autoscaling/fleet-management layer. This project proves the
-  serving mechanics, not a deployable product.
-- Reimplementing cross-GPU communication (DeepEP's job) or quantization
-  algorithms (AWQ/bitsandbytes's job) from scratch.
+  phase, not a Phase 0-7 requirement.
+- A production autoscaling/fleet-management layer, or a K8s deployment run
+  continuously. Phase 7 proves the deployment mechanics once; it does not
+  keep a service running.
+- Reimplementing cross-GPU communication (DeepEP's job), quantization
+  algorithms (AWQ/bitsandbytes's job), or the model's own forward pass
+  (PyTorch/HF's job) in Rust or anything else from scratch. Rust is scoped
+  to the router only (§8, ADR-0003) — not a full-service rewrite.
+- Chasing the Atlanta-metro enterprise-ML profile specifically (cloud-native
+  ML integrated into existing business systems) — that territory is already
+  covered by `almanac`. Phase 7 closes the national-posting gaps
+  (Docker/K8s/observability) without turning this into a different project.
 
-## 11. Open risks
+## 12. Open risks
 
 - **NVLink/SXM rental availability and price** at the time Phase 3 actually
   runs — checked live then, not assumed from this doc.
 - **Whether an upstream PR gets accepted** (Phase 2) is not within this
   project's control; "attempted and real, even if not merged" is still a
-  valid outcome, per this doc's own §9.
+  valid outcome, per this doc's own §10.
 - **DeepEP vs. UCCL-EP** — not fully resolved here; Phase 3 starts with a
   short evaluation against whatever hardware is actually rented.
+- **Rust experience level.** Writing a production-quality async Rust
+  server (even a scoped one) is a real skill investment if Rust is new —
+  Phase 7 budgets calendar time for that learning curve rather than
+  assuming it's free.

@@ -20,7 +20,14 @@ No phase shipped yet.
   the target model, a custom Triton grouped-GEMM kernel as the
   differentiator, DeepSeek's DeepEP for cross-GPU expert dispatch, standard
   benchmark tooling (vLLM's `benchmark_serving.py` / NVIDIA GenAI-Perf)
-  against vLLM/SGLang, a 7-phase plan. Two ADRs recorded alongside it
-  (grouped-GEMM over another attention-kernel reimplementation; DeepEP over
-  hand-rolled communication, and the NVLink/SXM hardware constraint that
-  decision carries into cost planning).
+  against vLLM/SGLang. Two ADRs recorded alongside it (grouped-GEMM over
+  another attention-kernel reimplementation; DeepEP over hand-rolled
+  communication, and the NVLink/SXM hardware constraint that decision
+  carries into cost planning).
+- Design revised to 8 phases (0-7) after checking the plan against real
+  inference-engineer job postings, national and Atlanta-metro: Phase 7 adds
+  a Rust router (HF `text-generation-inference`'s own documented
+  architecture) in front of the unchanged Python model server, Docker, a
+  Prometheus/Grafana observability layer, and a K8s deployment demoed once.
+  ADR-0003 records the Rust-scoped-to-the-router decision and what was
+  deliberately not rewritten.
