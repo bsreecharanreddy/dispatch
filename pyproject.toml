@@ -14,6 +14,7 @@ dependencies = [
     "transformers>=5.17.0",
     "accelerate>=1.15.0",
     "huggingface_hub>=1.31.0",
+    "safetensors>=0.8.0",
 ]
 
 # Runtime dependencies (torch, triton, the serving stack) get added as each

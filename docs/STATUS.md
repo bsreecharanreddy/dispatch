@@ -45,7 +45,7 @@ CLI, then the one real rented-GPU run). Work is happening on the
 - [x] Task 3: Provisioning CLI (`scripts/gpu/provision.py` `main()`) -- landed in the same commit as Task 2 (both touch `provision.py` and were written/tested together before the first commit of either)
 - [x] Task 4: Pure benchmark metrics (`src/dispatch/benchmark/metrics.py`)
 - [x] Task 5: Generation harness (`src/dispatch/benchmark/harness.py`)
-- [ ] Task 6: Reference-logit capture + tolerance compare (`src/dispatch/benchmark/reference.py`)
+- [x] Task 6: Reference-logit capture + tolerance compare (`src/dispatch/benchmark/reference.py`)
 - [ ] Task 7: Baseline CLI (`scripts/run_baseline.py`)
 - [ ] Task 8: Real rented-GPU run -- runbook executed, results + reference + cost recorded
 

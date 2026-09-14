@@ -1273,6 +1273,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from dispatch.benchmark.harness import load_model
 from dispatch.benchmark.reference import (
     capture_reference_logits,
     compare_within_tolerance,
@@ -1312,8 +1313,6 @@ def test_save_and_load_reference_round_trips(tmp_path: Path) -> None:
 
 @pytest.mark.slow
 def test_capture_reference_logits_is_deterministic_for_fixed_prompts() -> None:
-    from dispatch.benchmark.harness import load_model
-
     model, tokenizer = load_model("hf-internal-testing/tiny-random-gpt2")
 
     first = capture_reference_logits(model, tokenizer, ["hello"])
@@ -1380,7 +1379,8 @@ def compare_within_tolerance(
 ) -> dict[str, bool]:
     if actual.keys() != reference.keys():
         raise ValueError(
-            f"key mismatch: actual has {sorted(actual.keys())}, reference has {sorted(reference.keys())}"
+            f"key mismatch: actual has {sorted(actual.keys())}, "
+            f"reference has {sorted(reference.keys())}"
         )
     return {
         key: bool(torch.allclose(actual[key], reference[key], rtol=rtol, atol=atol))
