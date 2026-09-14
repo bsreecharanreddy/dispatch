@@ -1,0 +1,75 @@
+"""Two tiers: a fast fake-model test of the timing loop itself (no network,
+no GPU), and a `slow` test against a real tiny public HF model (network,
+still no GPU -- CPU inference on a few-KB model is fast).
+"""
+
+from __future__ import annotations
+
+import pytest
+import torch
+
+from dispatch.benchmark.harness import generate_with_timings, load_model
+
+TINY_MODEL = "hf-internal-testing/tiny-random-gpt2"
+
+
+class _FakeOutputs:
+    def __init__(self, logits: torch.Tensor) -> None:
+        self.logits = logits
+        self.past_key_values = None
+
+
+class _FakeModel:
+    def __init__(self, vocab_size: int = 10) -> None:
+        self.vocab_size = vocab_size
+        self.call_count = 0
+
+    def __call__(
+        self, *, input_ids: torch.Tensor, past_key_values: object, use_cache: bool
+    ) -> _FakeOutputs:
+        self.call_count += 1
+        logits = torch.zeros((1, input_ids.shape[-1], self.vocab_size))
+        logits[0, -1, self.call_count % self.vocab_size] = 10.0
+        return _FakeOutputs(logits)
+
+
+class _FakeBatchEncoding(dict):  # type: ignore[type-arg]
+    def to(self, device: str) -> _FakeBatchEncoding:
+        return self
+
+
+class _FakeTokenizer:
+    eos_token_id = 999
+
+    def __call__(self, prompt: str, return_tensors: str) -> _FakeBatchEncoding:
+        return _FakeBatchEncoding(input_ids=torch.tensor([[1, 2, 3]]))
+
+
+def test_generate_with_timings_runs_max_new_tokens_steps_without_eos() -> None:
+    model = _FakeModel()
+    tokenizer = _FakeTokenizer()
+    fake_clock = iter([0.0, 0.1, 0.2, 0.3])
+
+    timing = generate_with_timings(
+        model,  # type: ignore[arg-type]
+        tokenizer,  # type: ignore[arg-type]
+        "prompt",
+        max_new_tokens=3,
+        clock_fn=lambda: next(fake_clock),
+    )
+
+    assert timing.generated_token_count == 3
+    assert timing.prompt_token_count == 3
+    assert timing.start_time == 0.0
+    assert timing.token_times == (0.1, 0.2, 0.3)
+
+
+@pytest.mark.slow
+def test_generate_with_timings_against_a_real_tiny_model() -> None:
+    model, tokenizer = load_model(TINY_MODEL)
+
+    timing = generate_with_timings(model, tokenizer, "hello world", max_new_tokens=5)
+
+    assert 1 <= timing.generated_token_count <= 5
+    assert timing.time_to_first_token >= 0
+    assert all(b >= a for a, b in zip(timing.token_times, timing.token_times[1:], strict=False))

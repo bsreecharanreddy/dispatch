@@ -1159,12 +1159,13 @@ def load_model(
     model = AutoModelForCausalLM.from_pretrained(
         model_name, dtype=dtype, trust_remote_code=trust_remote_code
     )
-    model.to(device)
-    model.eval()
+    # torch's Module.to() overloads don't resolve a str device; Module.eval() is untyped.
+    model.to(device)  # type: ignore[arg-type]
+    model.eval()  # type: ignore[no-untyped-call]
     return model, tokenizer
 
 
-def generate_with_timings(
+def generate_with_timings(  # noqa: PLR0913 -- device/clock_fn are what make this testable
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
     prompt: str,
