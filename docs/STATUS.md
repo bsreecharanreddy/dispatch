@@ -47,7 +47,7 @@ CLI, then the one real rented-GPU run). Work is happening on the
 - [x] Task 5: Generation harness (`src/dispatch/benchmark/harness.py`)
 - [x] Task 6: Reference-logit capture + tolerance compare (`src/dispatch/benchmark/reference.py`)
 - [x] Task 7: Baseline CLI (`scripts/run_baseline.py`)
-- [ ] Task 8: Real rented-GPU run -- runbook executed, results + reference + cost recorded
+- [ ] Task 8: runbook written (`docs/runbooks/phase-0-baseline.md`), not yet run
 
 All of Phase 0's tooling (Tasks 1-7) is built and tested: RunPod
 provisioning, pod-wait orchestration, cost logging, the pure metrics math,
