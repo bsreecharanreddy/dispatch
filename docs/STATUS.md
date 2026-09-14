@@ -40,7 +40,7 @@ CLI, then the one real rented-GPU run). Work is happening on the
 `phase-0-baseline` branch per this repo's one-branch-per-phase convention
 -- pushed as a single PR once the phase is done, not before.
 
-- [ ] Task 1: RunPod API client (`scripts/gpu/runpod_client.py`)
+- [x] Task 1: RunPod API client (`scripts/gpu/runpod_client.py`)
 - [ ] Task 2: Pod-wait orchestration + cost-record logger (`scripts/gpu/provision.py`)
 - [ ] Task 3: Provisioning CLI (`scripts/gpu/provision.py` `main()`)
 - [ ] Task 4: Pure benchmark metrics (`src/dispatch/benchmark/metrics.py`)

@@ -22,7 +22,7 @@ fmt:
 	uv run ruff check --fix .
 
 typecheck:
-	uv run mypy src tests
+	uv run mypy src tests scripts
 
 # The full gate. Runs before every push -- CI runs the same three steps.
 check:

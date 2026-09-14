@@ -36,7 +36,7 @@ jobs:
 
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run mypy src tests
+      - run: uv run mypy src tests scripts
 
       # No GPU on a hosted runner -- anything marked `gpu` runs locally or
       # on a rented instance instead. See Makefile and pyproject.toml's

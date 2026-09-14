@@ -254,7 +254,9 @@ def _api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_create_pod_sends_expected_body_and_parses_response() -> None:
-    session = FakeSession(FakeResponse(200, {"id": "pod_123", "status": "PROVISIONING", "cost": 0.4}))
+    session = FakeSession(
+        FakeResponse(200, {"id": "pod_123", "status": "PROVISIONING", "cost": 0.4})
+    )
 
     handle = create_pod(
         "dispatch-baseline",
@@ -353,7 +355,9 @@ def _request(
     session: requests.Session, method: str, path: str, *, json: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     headers = {"Authorization": f"Bearer {_api_key()}", "Content-Type": "application/json"}
-    resp = session.request(method, f"{RUNPOD_API_BASE}{path}", json=json, headers=headers, timeout=30)
+    resp = session.request(
+        method, f"{RUNPOD_API_BASE}{path}", json=json, headers=headers, timeout=30
+    )
     if not resp.ok:
         raise RunPodAPIError(f"{method} {path} failed: {resp.status_code} {resp.text}")
     if resp.status_code == 204 or not resp.content:
@@ -1134,7 +1138,12 @@ import time
 from collections.abc import Callable
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
+)
 
 from dispatch.benchmark.metrics import TokenTimings
 
@@ -1547,7 +1556,9 @@ def run_baseline(
     )
 
     runs = [
-        generate_with_timings(model, tokenizer, prompt, max_new_tokens=max_new_tokens, device=device)
+        generate_with_timings(
+            model, tokenizer, prompt, max_new_tokens=max_new_tokens, device=device
+        )
         for prompt in prompts
         for _ in range(repetitions)
     ]
@@ -1583,7 +1594,12 @@ def main(argv: list[str] | None = None) -> None:
     results_path = args.output_dir / f"{args.run_label}-results.json"
     results_path.write_text(
         json.dumps(
-            {"model": args.model_name, "device": args.device, "dtype": args.dtype, **asdict(summary)},
+            {
+                "model": args.model_name,
+                "device": args.device,
+                "dtype": args.dtype,
+                **asdict(summary),
+            },
             indent=2,
         )
     )

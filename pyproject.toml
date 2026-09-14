@@ -8,12 +8,13 @@ authors = [
     { name = "bsreecharanreddy", email = "283869510+bsreecharanreddy@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "requests>=2.34.2",
+]
 
-# Runtime dependencies (torch, triton, the serving stack) get added once
-# docs/design/ lands, each floor checked live against pypi.org's JSON API at
-# the time it's added -- not guessed or carried over from a plan. Empty on
-# purpose until then.
+# Runtime dependencies (torch, triton, the serving stack) get added as each
+# is needed, each floor checked live against pypi.org's JSON API at the
+# time it's added -- not guessed or carried over from a plan.
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
@@ -25,6 +26,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.7",
+    "types-requests>=2.33.0.20260906",
 ]
 
 [tool.ruff]
