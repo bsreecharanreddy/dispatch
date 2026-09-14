@@ -30,9 +30,28 @@ observability, a K8s deployment demoed once) was added specifically because
 it closes gaps found by checking the design against real job postings
 rather than assuming coverage.
 
+## Phase 0 progress
+
+Implementation plan written and reviewed:
+`docs/plans/2026-09-14-phase-0-baseline-plan.md` (8 tasks: RunPod API
+client, pod-wait orchestration + cost logging, provisioning CLI, pure
+benchmark metrics, generation harness, reference-logit capture, baseline
+CLI, then the one real rented-GPU run). Work is happening on the
+`phase-0-baseline` branch per this repo's one-branch-per-phase convention
+-- pushed as a single PR once the phase is done, not before.
+
+- [ ] Task 1: RunPod API client (`scripts/gpu/runpod_client.py`)
+- [ ] Task 2: Pod-wait orchestration + cost-record logger (`scripts/gpu/provision.py`)
+- [ ] Task 3: Provisioning CLI (`scripts/gpu/provision.py` `main()`)
+- [ ] Task 4: Pure benchmark metrics (`src/dispatch/benchmark/metrics.py`)
+- [ ] Task 5: Generation harness (`src/dispatch/benchmark/harness.py`)
+- [ ] Task 6: Reference-logit capture + tolerance compare (`src/dispatch/benchmark/reference.py`)
+- [ ] Task 7: Baseline CLI (`scripts/run_baseline.py`)
+- [ ] Task 8: Real rented-GPU run -- runbook executed, results + reference + cost recorded
+
 ## Next step
 
-Write the Phase 0 implementation plan in `docs/plans/` (baseline:
-DeepSeekMoE-16B on one rented GPU, measured latency/throughput as the
-correctness reference), then GPU provisioning scripts in `scripts/gpu/`,
-before any model-serving code lands.
+Execute the plan task by task (TDD, one commit per task, this checklist
+updated in the same commit as each). Task 8 is gated on the user's
+explicit go-ahead and a stated budget cap -- it is the only task that
+spends money.

@@ -47,8 +47,11 @@ Phase 0, once written.
 
 ## Current status
 
-System design written, 2026-09-14 (see `docs/STATUS.md`). No implementation
-plan and no code yet.
+System design written, 2026-09-14 (see `docs/STATUS.md`). Phase 0's
+implementation plan is written
+(`docs/plans/2026-09-14-phase-0-baseline-plan.md`) and its tasks are being
+executed on the `phase-0-baseline` branch. `docs/STATUS.md` carries the
+task-by-task checklist.
 
 ## One governing principle
 
