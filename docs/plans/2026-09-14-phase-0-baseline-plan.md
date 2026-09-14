@@ -1542,7 +1542,7 @@ DEFAULT_PROMPTS = [
 ]
 
 
-def run_baseline(
+def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-facing knob
     model_name: str,
     *,
     device: str,

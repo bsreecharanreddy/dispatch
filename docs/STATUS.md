@@ -6,7 +6,7 @@ commit as the work it describes**, never as a follow-up.
 
 ## Current position
 
-**System design at its second pass, 2026-09-14. Still no code.** Design doc
+**System design at its second pass, 2026-09-14.** Design doc
 covers: model choice (deepseek-ai/deepseek-moe-16b-base), architecture
 (custom Triton grouped-GEMM kernel + DeepEP for cross-GPU dispatch +
 standard benchmark tooling against vLLM/SGLang), an 8-phase plan (0-7), cost
@@ -46,12 +46,28 @@ CLI, then the one real rented-GPU run). Work is happening on the
 - [x] Task 4: Pure benchmark metrics (`src/dispatch/benchmark/metrics.py`)
 - [x] Task 5: Generation harness (`src/dispatch/benchmark/harness.py`)
 - [x] Task 6: Reference-logit capture + tolerance compare (`src/dispatch/benchmark/reference.py`)
-- [ ] Task 7: Baseline CLI (`scripts/run_baseline.py`)
+- [x] Task 7: Baseline CLI (`scripts/run_baseline.py`)
 - [ ] Task 8: Real rented-GPU run -- runbook executed, results + reference + cost recorded
+
+All of Phase 0's tooling (Tasks 1-7) is built and tested: RunPod
+provisioning, pod-wait orchestration, cost logging, the pure metrics math,
+the model-loading/timed-generation harness, reference-logit capture, and
+the baseline CLI that ties them together. `make check` is green -- 26
+tests, lint and `mypy --strict` clean, including a real (network, CPU,
+no GPU) pass against `hf-internal-testing/tiny-random-gpt2` to prove the
+harness and reference capture actually work end to end. One real bug was
+caught by TDD along the way: `TokenTimings.inter_token_latencies` used
+`zip(..., strict=True)` over two sequences of different length by
+construction (`token_times` and `token_times[1:]`), which raises rather
+than pairwise-zips -- fixed to `strict=False` before the first commit
+touching it.
+
+Only Task 8 remains: the one real run against the full
+deepseek-ai/deepseek-moe-16b-base model on a rented GPU, per
+`docs/runbooks/phase-0-baseline.md` (not yet written).
 
 ## Next step
 
-Execute the plan task by task (TDD, one commit per task, this checklist
-updated in the same commit as each). Task 8 is gated on the user's
-explicit go-ahead and a stated budget cap -- it is the only task that
-spends money.
+Write Task 8's runbook (`docs/runbooks/phase-0-baseline.md`), then execute
+it with the user's explicit go-ahead and a stated budget cap -- it is the
+only task in this phase that spends money.
