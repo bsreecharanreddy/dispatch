@@ -30,29 +30,36 @@ piece neither of them touches.
 
 ## Read this first
 
-**`docs/design/`** will hold the authoritative architecture doc once it's
-written — model choice, exact kernel scope, phase breakdown, and what
-"done" looks like for each phase. **It does not exist yet.** The
-architecture is still being brainstormed; nothing below should be read as
-settled until that doc lands and this section is updated to point at it.
+**`docs/design/2026-09-14-dispatch-system-design.md`** is the authoritative
+architecture doc — model choice (deepseek-ai/deepseek-moe-16b-base), what's
+custom vs. reused, kernel scope, the multi-GPU/DeepEP plan and its real
+NVLink hardware constraint, benchmark methodology, the 7-phase plan, cost
+plan, and explicit scope boundaries. Read it before making any structural
+decision. `docs/adr/` carries the specific "why this over that" calls made
+along the way (0001: grouped-GEMM over another attention-kernel
+reimplementation; 0002: DeepEP over hand-rolled cross-GPU communication).
 
 `docs/STATUS.md` is the authoritative record of implementation state —
 updates **in the same commit as the work it describes**.
 
-`docs/plans/` will hold per-phase implementation plans once phases exist.
+`docs/plans/` will hold per-phase implementation plans, starting with
+Phase 0, once written.
 
 ## Current status
 
-Repo scaffolded, 2026-09-14. Conventions and tooling only — no design doc,
-no code. See `docs/STATUS.md`.
+System design written, 2026-09-14 (see `docs/STATUS.md`). No implementation
+plan and no code yet.
 
 ## One governing principle
 
-Not yet written. almanac's is "point-in-time correctness" — one sentence
-that names the specific failure mode the whole project exists to prevent.
-dispatch's equivalent gets named once the design doc pins down the exact
-architecture (what, precisely, a kernel or a benchmark could get silently
-wrong here) rather than being guessed at before that's decided.
+**Correctness before speed.** A kernel is not "fast" until it has been
+proven numerically correct against a reference implementation within a
+stated tolerance — a kernel that's fast because it's silently wrong is a
+bug, not a result, and it's invisible unless the correctness check is
+explicit. This is the kernel-work equivalent of almanac's point-in-time
+correctness: the specific failure mode that's easy to produce by accident,
+invisible in a casual read, and the entire reason this project's testing
+policy leads with correctness rather than benchmarks.
 
 ## Engineering patterns — non-negotiable
 
@@ -122,7 +129,7 @@ API when it's added, not guessed or carried over from anywhere else.
 
 ## Development workflow
 
-```
+```text
 new subsystem?
 ├── yes → brainstorm → dated doc in docs/design/ → approval
 │         → implementation plan in docs/plans/ → then code

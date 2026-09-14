@@ -6,16 +6,14 @@ execution, multi-GPU expert-parallel serving, and disaggregated
 prefill/decode, benchmarked against production serving engines (vLLM,
 SGLang) on real, measured throughput/latency/cost numbers, not estimates.
 
-**Status: not started.** This repo currently holds only its own scaffolding
-— conventions, tooling, and doc structure, carried over from
+**Status: design written, no code yet.** See
+[`docs/design/2026-09-14-dispatch-system-design.md`](docs/design/2026-09-14-dispatch-system-design.md)
+for the architecture — model choice, what's custom vs. reused, the 7-phase
+plan, and explicit scope boundaries — and `docs/STATUS.md` for the
+authoritative, same-commit-updated record of what's actually built.
+Conventions and tooling carried over from
 [almanac](https://github.com/bsreecharanreddy/almanac) and
 [canopica](https://github.com/bsreecharanreddy/canopica) where applicable.
-Nothing below is built yet. See `docs/STATUS.md` for the authoritative,
-same-commit-updated record.
-
-The system design is still being worked out and will land in `docs/design/`
-before any code does — read this section again once it's there rather than
-trusting this paragraph.
 
 ## Development
 

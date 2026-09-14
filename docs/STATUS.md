@@ -1,28 +1,34 @@
 # dispatch — Status
 
 Authoritative record of where implementation stands against
-`docs/design/` (not yet written). Updated **in the same commit as the work
-it describes**, never as a follow-up.
+`docs/design/2026-09-14-dispatch-system-design.md`. Updated **in the same
+commit as the work it describes**, never as a follow-up.
 
 ## Current position
 
-**Repo scaffolded, 2026-09-14. Nothing built yet.** This commit carries only
-conventions and tooling: `pyproject.toml` (uv, ruff, mypy --strict, pytest,
-dev deps at live-checked current versions), the `Makefile` gate targets, CI
-skeleton, `.claude/` hooks (STATUS.md same-commit check, story-bank
-reminder), dual MIT/Apache-2.0 licensing, and this doc structure — all
-carried over from
-[almanac](https://github.com/bsreecharanreddy/almanac)'s conventions where
-applicable, adapted where the stack differs (no Spark/dbt/Databricks here;
-GPU rental via lightweight scripts instead of Terraform).
+**System design written, 2026-09-14. Still no code.** Design doc at
+`docs/design/2026-09-14-dispatch-system-design.md`: model choice
+(deepseek-ai/deepseek-moe-16b-base), architecture (custom Triton
+grouped-GEMM kernel + DeepEP for cross-GPU dispatch + standard benchmark
+tooling against vLLM/SGLang), a 7-phase plan, cost plan, and explicit scope
+boundaries. Two ADRs recorded alongside it:
 
-Deliberately **not** carried over: almanac's project-specific
-`.claude/skills/` (leakage-review, paid-window, design-decision). Those
-exist because a specific incident already happened on almanac — dispatch
-has had none yet, so its skills folder starts empty. See CLAUDE.md's
-`.claude/` tooling section.
+- `docs/adr/0001-grouped-gemm-kernel-over-attention-kernel.md` — why the
+  kernel targets MoE grouped-GEMM and not another flash-attention
+  reimplementation (that pattern is saturated; checked against actual
+  GitHub search results before deciding, not assumed).
+- `docs/adr/0002-deepep-over-hand-rolled-communication.md` — why cross-GPU
+  expert dispatch uses DeepSeek's DeepEP rather than hand-rolled
+  communication, and the real NVLink/SXM hardware constraint that decision
+  carries into Phase 3's cost plan.
 
-**Next step**: finish brainstorming the system architecture (model choice,
-kernel scope, phase breakdown) and write it up as
-`docs/design/YYYY-MM-DD-dispatch-system-design.md`, then a phase 0
-implementation plan in `docs/plans/`, before any code lands.
+Repo scaffolding (tooling, conventions, licensing) landed in the previous
+commit — see CLAUDE.md for what's carried over from
+[almanac](https://github.com/bsreecharanreddy/almanac)/
+[canopica](https://github.com/bsreecharanreddy/canopica) and what's
+deliberately not (project-specific incident-derived skills).
+
+**Next step**: write the Phase 0 implementation plan in `docs/plans/`
+(baseline: DeepSeekMoE-16B on one rented GPU, measured latency/throughput
+as the correctness reference), then GPU provisioning scripts in
+`scripts/gpu/`, before any model-serving code lands.
