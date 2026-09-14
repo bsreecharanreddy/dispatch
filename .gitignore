@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+
+# Model weights and other large downloaded/cached artifacts -- never
+# committed, always re-fetched or re-derived.
+/data/
+/models/
+*.safetensors
+*.gguf
+*.bin
+wandb/
+.cache/
+
+# GPU rental / benchmark run artifacts -- raw output belongs in
+# docs/findings/ as a written-up, measured result, not as a committed blob.
+/runs/
+*.nsys-rep
+*.ncu-rep
+
+# Secrets -- provider API keys (RunPod/Vast.ai/etc.) live here, never in git.
+.env
+*.pem
+*.key
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Story bank gist id -- the gist is secret; its id stays out of the repo.
+.claude/story-bank-gist-id
+
+# Local-only Claude Code settings (per-machine permission grants, etc.)
+.claude/settings.local.json
+
+# graphify -- local knowledge-graph build, regenerable local state. See
+# CLAUDE.md's graphify section.
+graphify-out/

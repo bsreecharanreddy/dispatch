@@ -1,0 +1,24 @@
+{
+  "includeCoAuthoredBy": false,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-status-md-commit.sh\"",
+            "timeout": 15,
+            "statusMessage": "Checking docs/STATUS.md is staged with this commit..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/story-bank-reminder.sh\"",
+            "timeout": 15,
+            "statusMessage": "Checking whether this task earned a story-bank entry..."
+          }
+        ]
+      }
+    ]
+  }
+}

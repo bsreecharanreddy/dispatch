@@ -1,0 +1,58 @@
+[project]
+name = "dispatch"
+version = "0.1.0"
+description = "An inference engine for the token-routing layer of Mixture-of-Experts models"
+readme = "README.md"
+license = { text = "MIT OR Apache-2.0" }
+authors = [
+    { name = "bsreecharanreddy", email = "283869510+bsreecharanreddy@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+# Runtime dependencies (torch, triton, the serving stack) get added once
+# docs/design/ lands, each floor checked live against pypi.org's JSON API at
+# the time it's added -- not guessed or carried over from a plan. Empty on
+# purpose until then.
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.7",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "PL", "RUF", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# Comparing against expected literals is normal and readable in tests.
+"tests/**/*.py" = ["PLR2004", "PLR0913"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+mypy_path = "src"
+
+[tool.coverage.run]
+source = ["src/dispatch"]
+
+[tool.pytest.ini_options]
+markers = [
+    "gpu: needs a real CUDA device -- excluded from CI, run locally or on a rented instance",
+    "slow: excluded from the fast inner-loop selection",
+]
