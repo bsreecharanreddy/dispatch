@@ -925,7 +925,7 @@ class TokenTimings:
 
     @property
     def inter_token_latencies(self) -> tuple[float, ...]:
-        return tuple(b - a for a, b in zip(self.token_times, self.token_times[1:], strict=True))
+        return tuple(b - a for a, b in zip(self.token_times, self.token_times[1:], strict=False))
 
     @property
     def total_latency(self) -> float:
@@ -1113,7 +1113,7 @@ def test_generate_with_timings_against_a_real_tiny_model() -> None:
 
     assert 1 <= timing.generated_token_count <= 5
     assert timing.time_to_first_token >= 0
-    assert all(b >= a for a, b in zip(timing.token_times, timing.token_times[1:], strict=True))
+    assert all(b >= a for a, b in zip(timing.token_times, timing.token_times[1:], strict=False))
 ```
 
 - [ ] **Step 3: Run tests to verify they fail**

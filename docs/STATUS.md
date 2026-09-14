@@ -43,7 +43,7 @@ CLI, then the one real rented-GPU run). Work is happening on the
 - [x] Task 1: RunPod API client (`scripts/gpu/runpod_client.py`)
 - [x] Task 2: Pod-wait orchestration + cost-record logger (`scripts/gpu/provision.py`)
 - [x] Task 3: Provisioning CLI (`scripts/gpu/provision.py` `main()`) -- landed in the same commit as Task 2 (both touch `provision.py` and were written/tested together before the first commit of either)
-- [ ] Task 4: Pure benchmark metrics (`src/dispatch/benchmark/metrics.py`)
+- [x] Task 4: Pure benchmark metrics (`src/dispatch/benchmark/metrics.py`)
 - [ ] Task 5: Generation harness (`src/dispatch/benchmark/harness.py`)
 - [ ] Task 6: Reference-logit capture + tolerance compare (`src/dispatch/benchmark/reference.py`)
 - [ ] Task 7: Baseline CLI (`scripts/run_baseline.py`)
