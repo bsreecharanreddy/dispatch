@@ -16,6 +16,15 @@
   13.0`, `triton 3.8.0`.
 - No model download -- synthetic weights only, per the plan's Task 6
   scope.
+- No usable local SSH private key existed for the key already registered
+  with RunPod from Phase 0 (`dispatch-phase-0-baseline-20260914`). A new
+  ed25519 keypair was generated locally
+  (`~/.ssh/dispatch_runpod_ed25519`, comment
+  `dispatch-phase-1-kernels-20260915`) and registered on the account
+  ADDITIVELY (the Phase 0 key was resent in the same call, not dropped --
+  `update-ssh-keys` is a full replacement, not a merge). Both keys are
+  now authorized on pods created with `startSsh`; Task 9's operator can
+  use either.
 
 ## Correctness
 
@@ -52,7 +61,12 @@ torch.testing.assert_close(
 )
 ```
 
-Re-synced and re-ran: 25 passed, 0 warnings.
+Re-synced and re-ran: 25 passed, 0 warnings. Regression-guarded with a new
+CPU test, `test_assert_matches_reference_accepts_gradient_carrying_tensors`
+(`tests/unit/test_moe_forward.py`), which fails under
+`warnings.simplefilter("error")` on the pre-fix code and passes on the
+fix -- confirmed by temporarily reverting the fix locally, observing the
+same `UserWarning` this session hit on real hardware, then restoring it.
 
 ## Mutation check
 
@@ -69,15 +83,20 @@ read expert 0's weights), synced, and re-run:
   is a pure host-side validation test that never reaches the mutated
   kernel body, so it is expected to be unaffected.
 
-Reverted (`git diff` against the pre-mutation commit confirmed empty),
-re-synced, re-ran: **25 passed** again. The suite can fail, and the fix
-restores it.
+Reverted (`git diff -- src/dispatch/kernels/grouped_gemm.py` against the
+pre-mutation commit confirmed empty -- the committed kernel file carries
+no trace of the mutation), re-synced, re-ran: **25 passed** again. The
+suite can fail, and the fix restores it.
 
 ## Cost
 
 $0.0606 for 991 seconds (16.5 minutes) of RTX 3090 rental at $0.22/hr --
 well under the $3 cap. Full record:
-`docs/findings/2026-09-15-phase-1-kernel-correctness-cost.md`.
+`docs/findings/2026-09-15-phase-1-kernel-correctness-cost.md`. Duration
+provenance: pod `createdAt` was `2026-09-15T15:43:56.898Z` (from the
+create-pod response's `startedAt` field); wall-clock at the point of
+`delete-pod` was `2026-09-15T16:00:27Z` (local `date -u`, immediately
+before the terminate call) -- 991.25s between them, rounded to 991s.
 
 Pod `sta1ejhhrg5bc4` terminated via `delete-pod`; termination verified
 independently by re-querying the pod afterward, which returned `404 pod

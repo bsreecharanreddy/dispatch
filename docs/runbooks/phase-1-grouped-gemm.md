@@ -68,5 +68,10 @@ Synthetic weights only; no model download; any GPU Triton supports.
        "
        uv run python -m scripts.gpu.provision terminate --pod-id <pod_id>
 
-   Then re-read `get_pod('<pod_id>').status` and confirm `TERMINATED`
-   rather than trusting the terminate command's exit code.
+   Then re-query the pod independently rather than trusting the terminate
+   command's exit code alone. Confirmed live 2026-09-15: RunPod's
+   terminate/delete removes the pod entirely rather than moving it to a
+   `TERMINATED` status field -- `get_pod('<pod_id>')` (a `GET
+   /pods/{id}`) raises `RunPodAPIError` from a `404`, which is a stronger
+   confirmation than a status string would be. Expect the 404, not a
+   `.status == "TERMINATED"` read.

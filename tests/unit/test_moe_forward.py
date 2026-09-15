@@ -4,6 +4,8 @@ match torch_grouped_matmul -- everything around the GEMM is proven here."""
 
 from __future__ import annotations
 
+import warnings
+
 import pytest
 import torch
 
@@ -81,6 +83,18 @@ def test_assert_matches_reference_scales_atol_to_the_output() -> None:
     with pytest.raises(AssertionError):
         # a flat atol=1e-2 would pass this: every value is off by 100%
         assert_matches_reference(expected * 2, expected)
+
+
+def test_assert_matches_reference_accepts_gradient_carrying_tensors() -> None:
+    """A real GPU session (2026-09-15) first exercised this with a
+    ReferenceMoE output, which carries requires_grad=True -- converting it
+    to a Python float without detaching first raises a UserWarning."""
+    expected = torch.full((4,), 1e-3, requires_grad=True)
+    actual = (expected * 1.01).clone()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert_matches_reference(actual, expected)
 
 
 def test_stack_expert_weights_rejects_a_non_linear_projection() -> None:
