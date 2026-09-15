@@ -100,7 +100,7 @@ Plan: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`. Branch
 - [x] Task 5: Persistent, cache-aware kernel -- GPU-verified in Task 6
 - [x] Task 6: Kernel correctness session on a rented GPU (runbook session A)
 - [x] Task 7: Backend registry + kernel micro-benchmark CLI (`backends.py`, `bench.py`, `scripts/run_kernel_bench.py`)
-- [ ] Task 8: Real-model integration (`--moe-kernel`, `--compare-reference`)
+- [x] Task 8: Real-model integration (`--moe-kernel`, `--compare-reference`)
 - [ ] Task 9: Measured run on an L40 (runbook session B)
 
 Task 6's rented-GPU session (2026-09-15, RTX 3090 substituted for the
@@ -128,6 +128,32 @@ backend on the benchmark's own input, and writes config + results JSON to
 `docs/findings/`. All CPU-testable (11 new tests, 62 passed + 1 skipped
 total); the real timed run happens in Task 9's runbook, on a GPU host.
 
+Task 8 adds `dispatch.kernels.integration` (`patch_moe_infer`, which walks
+a loaded model's modules and replaces each MoE layer's `moe_infer` --
+DeepSeek's own remote-code inference method -- with a closure over
+`grouped_moe_routed` and a stacked-weights view of that layer's experts;
+rejects an `experts` attribute that isn't an `nn.ModuleList`) and, in
+`dispatch.benchmark.reference`, `TopKAgreement`/`compare_top_k_agreement`
+-- a kernel-swap-shaped comparison (top-1 agreement, mutual top-k
+membership, max abs diff) that tolerates a near-tie flip but flags an
+argmax that lands outside the other side's top-k. `compare_within_tolerance`
+was refactored to share the key-mismatch check via a new `_require_same_keys`
+helper, with no behavior change. `scripts/run_baseline.py` gained
+`--moe-kernel` (patches the resolved backend into the model before timing;
+raises if it patches zero layers, so a kernel run can never silently time
+the stock model) and `--compare-reference` (compares the run's logits
+against a stock run's file and exits non-zero on disagreement, but only
+*after* the results JSON and reference safetensors are written to disk).
+The `FakeDeepseekMoE` test harness in `test_integration.py` transcribes
+DeepSeek's actual `moe_infer` body (only numpy's cumsum swapped for
+torch's) so the patched path is proven against DeepSeek's real inference
+code, not a paraphrase. 17 new/changed tests across
+`test_integration.py`, `test_reference.py`, and `test_run_baseline.py` (3
+of them `slow`, downloading `hf-internal-testing/tiny-random-gpt2` from
+Hugging Face Hub); full non-GPU suite is 72 passed + 1 skipped (the skip
+is the pre-existing Triton-is-Linux-only guard in
+`test_grouped_gemm_kernel.py`, unrelated to this task).
+
 ## Next step
 
-Task 8 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
+Task 9 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.

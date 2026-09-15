@@ -1,6 +1,8 @@
-"""CLI: run dispatch's Phase 0 baseline -- a plain HF forward pass on one
-rented GPU. Produces the honest "before" latency/throughput numbers and
-the reference logits Phase 1's kernel gets checked against.
+"""CLI: run DeepSeekMoE-16B on one rented GPU -- the stock HF forward pass by
+default, or with a dispatch grouped-GEMM backend patched into every MoE
+layer (--moe-kernel). Writes latency/throughput and the run's logits; with
+--compare-reference, also checks those logits against a stock run's and
+exits non-zero if they disagree.
 """
 
 from __future__ import annotations
@@ -15,7 +17,14 @@ import torch
 
 from dispatch.benchmark.harness import generate_with_timings, load_model
 from dispatch.benchmark.metrics import TokenTimings, summarize
-from dispatch.benchmark.reference import capture_reference_logits, save_reference
+from dispatch.benchmark.reference import (
+    capture_reference_logits,
+    compare_top_k_agreement,
+    load_reference,
+    save_reference,
+)
+from dispatch.kernels.backends import BACKENDS, resolve_backend
+from dispatch.kernels.integration import patch_moe_infer
 
 DEFAULT_PROMPTS = [
     "The quick brown fox jumps over the lazy dog.",
@@ -33,10 +42,20 @@ def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-faci
     prompts: list[str],
     repetitions: int,
     max_new_tokens: int,
-) -> tuple[list[TokenTimings], dict[str, torch.Tensor]]:
+    moe_kernel: str = "none",
+) -> tuple[list[TokenTimings], dict[str, torch.Tensor], int]:
+    """Returns the timed runs, the logits, and how many MoE layers were patched."""
     model, tokenizer = load_model(
         model_name, device=device, dtype=dtype, trust_remote_code=trust_remote_code
     )
+    moe_layers_patched = 0
+    if moe_kernel != "none":
+        moe_layers_patched = patch_moe_infer(model, resolve_backend(moe_kernel))
+        if moe_layers_patched == 0:
+            raise RuntimeError(
+                f"--moe-kernel {moe_kernel} patched no MoE layers: {model_name} has no "
+                "moe_infer to replace, so this run would time the stock model under a kernel's name"
+            )
 
     runs = [
         generate_with_timings(
@@ -45,8 +64,8 @@ def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-faci
         for prompt in prompts
         for _ in range(repetitions)
     ]
-    reference = capture_reference_logits(model, tokenizer, prompts, device=device)
-    return runs, reference
+    logits = capture_reference_logits(model, tokenizer, prompts, device=device)
+    return runs, logits, moe_layers_patched
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -59,10 +78,17 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--max-new-tokens", type=int, default=64)
     parser.add_argument("--output-dir", type=Path, default=Path("docs/findings"))
     parser.add_argument("--run-label", default=time.strftime("%Y-%m-%d-phase-0-baseline"))
+    parser.add_argument("--moe-kernel", default="none", choices=["none", *BACKENDS])
+    parser.add_argument(
+        "--compare-reference",
+        type=Path,
+        default=None,
+        help="logits file from a stock run of the same model and prompts",
+    )
     args = parser.parse_args(argv)
 
     dtype: torch.dtype = getattr(torch, args.dtype)
-    runs, reference = run_baseline(
+    runs, logits, moe_layers_patched = run_baseline(
         args.model_name,
         device=args.device,
         dtype=dtype,
@@ -70,8 +96,14 @@ def main(argv: list[str] | None = None) -> None:
         prompts=DEFAULT_PROMPTS,
         repetitions=args.repetitions,
         max_new_tokens=args.max_new_tokens,
+        moe_kernel=args.moe_kernel,
     )
     summary = summarize(runs)
+    comparison = (
+        compare_top_k_agreement(logits, load_reference(args.compare_reference))
+        if args.compare_reference is not None
+        else {}
+    )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     results_path = args.output_dir / f"{args.run_label}-results.json"
@@ -81,17 +113,25 @@ def main(argv: list[str] | None = None) -> None:
                 "model": args.model_name,
                 "device": args.device,
                 "dtype": args.dtype,
+                "moe_kernel": args.moe_kernel,
+                "moe_layers_patched": moe_layers_patched,
                 **asdict(summary),
+                "reference_comparison": {key: asdict(value) for key, value in comparison.items()},
             },
             indent=2,
         )
     )
 
     reference_path = args.output_dir / f"{args.run_label}-reference.safetensors"
-    save_reference(reference, reference_path)
+    save_reference(logits, reference_path)
 
     print(f"wrote {results_path}")
     print(f"wrote {reference_path}")
+
+    if not all(value.mutual_top_k for value in comparison.values()):
+        raise SystemExit(
+            f"{args.moe_kernel} logits disagree with {args.compare_reference} -- see {results_path}"
+        )
 
 
 if __name__ == "__main__":
