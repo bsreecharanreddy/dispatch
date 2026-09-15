@@ -88,12 +88,21 @@ design; the file exists locally but Phase 1 regenerates it from
 See `docs/findings/2026-09-14-phase-0-baseline-run.md` for the full
 account.
 
+## Phase 1 progress
+
+Plan: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`. Branch
+`phase-1-grouped-gemm`, pushed once as a single PR when the phase is done.
+
+- [x] Task 1: Pure-PyTorch MoE reference (`src/dispatch/kernels/reference_moe.py`)
+- [ ] Task 2: Token grouping + tile schedule (`grouping.py`, `tile_schedule.py`)
+- [ ] Task 3: Eager grouped MoE path -- the grouped-GEMM contract (`moe_forward.py`)
+- [ ] Task 4: Naive Triton grouped-GEMM kernel -- written; GPU-verified in Task 6
+- [ ] Task 5: Persistent, cache-aware kernel -- written; GPU-verified in Task 6
+- [ ] Task 6: Kernel correctness session on a rented GPU (runbook session A)
+- [ ] Task 7: Backend registry + kernel micro-benchmark CLI
+- [ ] Task 8: Real-model integration (`--moe-kernel`, `--compare-reference`)
+- [ ] Task 9: Measured run on an L40 (runbook session B)
+
 ## Next step
 
-Phase 0 is merged to `main` (PR #1). Phase 1's implementation plan is
-written: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md` -- 9 tasks:
-a CPU-tested MoE reference and grouped-layout contract, naive and
-persistent Triton grouped-GEMM kernels, a rented-GPU correctness session,
-a kernel benchmark CLI, real-model integration, then the measured run on
-the same GPU class as Phase 0. Next: create the `phase-1-grouped-gemm`
-branch, commit the plan as its first commit, and start Task 1.
+Task 2 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
