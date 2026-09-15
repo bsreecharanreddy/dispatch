@@ -67,14 +67,18 @@ correctness tests on two real GPUs (RTX 3090, then the L40 the measured
 run used) with zero kernel bugs found. Swapped into
 `deepseek-ai/deepseek-moe-16b-base`'s real 27 MoE layers, both kernels
 measured **~65-67% faster decode throughput than DeepSeek's own stock
-`moe_infer`** (12.55 -> 20.98 tokens/sec, naive kernel) at perfect mutual
-top-5 and top-1 logit agreement across every tested position -- zero
-measured correctness cost for that speedup. One honest null result: the
-persistent kernel's grouped launch ordering (built for L2 cache reuse)
-showed no measurable benefit over the naive kernel anywhere in this
-session, end-to-end or in a token-count sweep from 1 to 2048 -- unbatched
-decode gives each expert too few rows for it to matter, exactly as the
-plan's own risk section predicted before the run happened. Total GPU
+`moe_infer`** (12.55 -> 20.98 tokens/sec, naive kernel; bf16, single L40,
+unbatched eager decode, 3 prompts x 5 repetitions, 64 new tokens) at
+perfect mutual top-5 and top-1 logit agreement across every tested
+position -- zero measured correctness cost for that speedup. One honest
+null result: the persistent kernel's grouped launch ordering (built for
+L2 cache reuse) showed no benefit over the naive kernel at the token
+count that actually drives decode throughput (a tie at 1 token/step);
+a token-count sweep (1-2048) found it does win 3-8% at 16-128 tokens but
+loses by up to 14% at 512-2048, a result too workload-specific to
+generalize past this project's own single-request decode scope -- exactly
+the kind of risk the plan's own risk section flagged before the run
+happened. Total GPU
 cost across both paid sessions: **$0.65** ($0.06 kernel correctness +
 $0.59 the measured run). Full account:
 `docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.

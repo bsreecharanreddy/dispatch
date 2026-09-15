@@ -12,6 +12,18 @@
   later. Rate: **$0.82/hr** -- the same Secure Cloud rate Phase 0 paid,
   for the same reason (Community's cheaper L40 tier was unavailable at
   deploy time both times).
+- This pod took roughly 24 minutes to become SSH-reachable after
+  creation (`runtime` stayed unpopulated and the SSH proxy returned
+  "container not found" throughout that window), notably longer than
+  Task 6's RTX 3090 pod (~2.5 minutes) on the same provider. Direct SSH
+  connected on the first attempt once `runtime` populated. Billing starts
+  at pod creation regardless of SSH readiness, so this added to the
+  measured cost below; worth budgeting extra idle time for Secure Cloud
+  L40 provisioning specifically in a future session.
+- Pod terminated via `delete-pod` after all results were copied off;
+  termination verified independently by a second, separate `get-pod`
+  query, which returned `404 pod not found` (RunPod's terminate/delete
+  fully removes the resource, confirmed the same way in Task 6).
 - Image `runpod/pytorch:1.3.1-cu1290-torch290-ubuntu2404` (current stable
   tag on Docker Hub, checked live 2026-09-15).
 - `torch 2.14.0+cu130`, `cuda 13.0`, `triton 3.8.0` (confirmed live and
@@ -27,11 +39,12 @@
 ## Correctness
 
 `pytest -m gpu tests/unit/test_grouped_gemm_kernel.py -v -rs` on this L40:
-**25 passed, 0 skipped** (compute capability 8.9 runs the bf16 cases),
-25.6 seconds per test on average due to Triton's first-call compilation
-on a card this session hadn't used before -- both kernels re-verified
-correct on the exact hardware the timed numbers below come from, not
-just on Task 6's RTX 3090.
+**25 passed, 0 skipped** (compute capability 8.9 runs the bf16 cases) in
+186.9s total (7.5s/test average) -- Triton's first-call compilation on a
+card this session hadn't used before, plus the model-independent nature
+of these tests keeping most of that on the kernel side rather than model
+loading. Both kernels re-verified correct on the exact hardware the
+timed numbers below come from, not just on Task 6's RTX 3090.
 
 End to end, from each results JSON's `reference_comparison` (3 prompts,
 11/11/7 generated-token positions):
@@ -64,11 +77,12 @@ Three transient CUDA allocator warnings
 bytes`) appeared once per kernel-backed run (not the stock run), always
 for the same ~352MB allocation, and each run still completed and
 produced correct output -- PyTorch's caching allocator retried and
-succeeded. 369098752 bytes matches Task 8's review of `stack_expert_weights`'s
-per-layer re-stacking cost for this model
-(moe_intermediate_size x hidden_size x 2 bytes x roughly one projection),
-so this is exactly the "peak overhead is one layer's projection, not a
-doubled model" memory shape that review predicted -- confirmed here as a
+succeeded. 369,098,752 bytes = `n_routed_experts x moe_intermediate_size
+x hidden_size x 2 bytes` = 64 x 1408 x 2048 x 2, exactly -- one expert
+projection's weights across all 64 experts, matching Task 8's review of
+`stack_expert_weights`'s per-layer re-stacking cost for this model. This
+is exactly the "peak overhead is one layer's projection, not a doubled
+model" memory shape that review predicted -- confirmed here as a
 real, if narrowly-avoided, memory-pressure point on a 46GB card with a
 32.8GB model already loaded. Not a correctness problem in this run; worth
 knowing if a future session uses a smaller card or a larger model.
@@ -77,6 +91,11 @@ knowing if a future session uses a smaller card or a larger model.
 
 Same config as Phase 0 -- bf16, single L40, unbatched eager decode, 3
 prompts x 5 repetitions, 64 new tokens -- all four runs in one session.
+No separate warm-up phase: p99 TTFT includes each run's own first-call
+overhead (CUDA context and, for the kernel-backed runs, Triton
+compilation), which is why p99 TTFT runs well above mean/p50 for every
+row below -- consistent with Phase 0's own observation that the first
+run pulls the tail up.
 
 | Run | mean tokens/sec | mean TTFT | p50 TTFT | p99 TTFT | mean ITL | $ per 1M tokens |
 |---|---|---|---|---|---|---|
@@ -103,19 +122,23 @@ measured, not estimated.
 
 **Naive and persistent are statistically indistinguishable at this
 config** (20.98 vs. 20.80 tok/s, well within this run's own p50/p99
-spread). This is not a surprise this project didn't already predict: the
-plan's risk section states plainly that unbatched decode gives each MoE
-layer only 6 routed rows per step (one per selected expert, since
-`num_experts_per_tok=6`), so there is no multi-tile-per-expert band of
-rows for the persistent kernel's grouped launch ordering to keep warm in
-L2 across. The kernel micro-benchmark below, which sweeps token count
-specifically to surface where grouped launch ordering does pay off, is
-where that shows up instead of in this end-to-end number. This is
-recorded as a real result, not buried: **grouped-GEMM's win here is
-almost entirely from batching all six routed experts into one grouped
-launch instead of looping through a slow gather per expert, not from
-persistent-kernel cache reuse** -- decode is simply the wrong regime for
-the latter, exactly as predicted.
+spread). At the 1-token-per-step granularity this end-to-end run actually
+exercises (unbatched decode routes 6 rows per MoE layer per generated
+token -- one per selected expert, since `num_experts_per_tok=6`), the
+kernel micro-benchmark below shows persistent running 0.2-3.1% *slower*
+than naive at exactly this shape (`num_tokens=1`), which is consistent
+with this end-to-end pair being a tie within measurement noise rather
+than either kernel actually winning. The plan's risk section predicted
+this: too few routed rows per expert at decode granularity for the
+persistent kernel's grouped launch ordering to have a band of same-expert
+rows to keep warm in L2. This is recorded as a real result, not buried:
+**grouped-GEMM's win here is almost entirely from batching all six
+routed experts into one grouped launch instead of looping through a slow
+gather per expert, not from persistent-kernel cache reuse at this token
+count** -- decode-per-step is the wrong regime for the latter, as
+predicted. (The micro-benchmark below finds persistent *does* win at
+somewhat larger token counts than a single decode step ever produces --
+see "Kernel micro-benchmark".)
 
 ## Kernel micro-benchmark
 
@@ -143,28 +166,46 @@ triton versions, block sizes -- alongside every number).
 |---|---|---|---|---|---|---|
 | 1 | 1.242, 0.08 | 0.510, 0.20 | 0.526, 0.20 | 0.104, 0.33 | 0.078, 0.44 | 0.079, 0.44 |
 | 16 | 7.020, 0.24 | 1.709, 0.97 | 1.629, 1.02 | 1.908, 0.29 | 0.555, 1.00 | 0.517, 1.07 |
-| 128 | 9.145, 1.45 | 2.187, 6.08 | 2.079, 6.39 | 2.696, 1.64 | 0.696, 6.36 | 0.647, 6.85 |
-| 512 | 9.927, 5.35 | 2.288, 23.23 | 2.341, 22.71 | 2.898, 6.11 | 0.706, 25.11 | 0.677, 26.17 |
+| 128 | 9.145, 1.45 | 2.187, 6.07 | 2.079, 6.39 | 2.696, 1.64 | 0.696, 6.36 | 0.647, 6.85 |
+| 512 | 9.927, 5.35 | 2.288, 23.23 | 2.341, 22.71 | 2.898, 6.11 | 0.705, 25.11 | 0.677, 26.17 |
 | 2048 | 10.344, 20.55 | 4.982, 42.67 | 5.314, 40.01 | 2.942, 24.09 | 1.600, 44.29 | 1.708, 41.50 |
 
-Both routing distributions tell the same story: at 1-16 tokens (the
-decode regime the end-to-end run above actually measured), naive and
-persistent are within noise of each other and both already 2-4x faster
-than the eager `torch` loop; from 128 tokens up (prefill-shaped work with
-more rows per expert), naive is consistently as fast as or slightly
-faster than persistent at this project's fixed, untuned block sizes
-(`BLOCK_N=64`, `BLOCK_K=64`, `GROUP_SIZE_M=8`) -- the persistent kernel's
-grouped launch ordering never shows a measurable win over the naive
-kernel's simpler one-CTA-per-tile launch at any token count this sweep
-covers, on this card, at these block sizes. This does not mean the
-persistent design is wrong; it means this specific workload (67 total
-routed rows per layer even at 2048 tokens x 6 experts-per-token, spread
-across 64 experts) rarely gives any single expert more than one or two
-`BLOCK_M=16` tiles for grouped ordering to amortize across. Distribution
-skew (`zipf` vs. `uniform`) makes no visible difference to either
-kernel's `layer` numbers, consistent with 64 experts each still getting
-enough tokens at these token counts that per-expert row counts don't
-swing tile counts much either way.
+Both routing distributions already are much faster than the eager
+`torch` loop at every token count -- 2-10x on `layer`, more on the
+standalone `gemm`. The persistent-vs-naive comparison is not flat across
+the sweep; it changes sign twice, and the same sign shows up in both
+routing distributions and in both measurement targets (`layer` and
+`gemm`), which is the signature of a real effect rather than noise:
+
+| tokens | rows/expert (avg) | tiles/expert (avg, `BLOCK_M=16`) | persistent vs. naive, `layer` (zipf / uniform) |
+|---|---|---|---|
+| 1 | 0.09 | 0.01 | +1.3% / +3.1% (persistent slower) |
+| 16 | 1.5 | 0.09 | -2.8% / -4.7% (persistent faster) |
+| 128 | 12 | 0.75 | -4.4% / -5.0% (persistent faster) |
+| 512 | 48 | 3 | +9.5% / +2.3% (persistent slower) |
+| 2048 | 192 | 12 | +14.3% / +6.7% (persistent slower) |
+
+At the two smallest token counts *above* single-token decode (16 and
+128), the persistent kernel wins a modest but consistent 3-8% in every
+one of the four cells (two distributions x two measurement targets). At
+512 and 2048 it loses, by as much as 14% at 2048/zipf. At the actual
+decode granularity (1 token, `num_experts_per_tok=6` routed rows per
+layer, well under one `BLOCK_M=16` tile per expert on average) it is a
+tie leaning slightly toward naive being faster -- consistent with the
+end-to-end result above. This does not fit a single one-line story: the
+"rows per expert" column rules out a naive "more rows always helps
+persistent" reading (128 tokens, 12 rows/expert, is where persistent
+wins most; 2048 tokens, 192 rows/expert, is where it loses most), so
+whatever is driving the 512-2048 regression is not simply "not enough
+tiles" -- if anything the opposite. Distribution skew (`zipf` vs.
+`uniform`) does *not* wash out here either: at 16 tokens specifically,
+`naive/layer` and `persistent/layer` both run 17-19% slower under
+`uniform` than under `zipf`, likely because `zipf`'s concentration
+toward a handful of low-index experts leaves fewer of the 64 experts
+occupied at all at just 96 total routed rows, while `uniform` spreads the
+same 96 rows thinner across more experts and pays more per-tile launch
+overhead; at 1/128/512/2048 tokens the two distributions track each
+other closely on `layer` (within a few percent).
 
 ## What it shows
 
@@ -177,18 +218,33 @@ third of that win is the grouped-layout reformulation alone (the eager
 execution.
 
 **The persistent kernel's headline optimization -- grouped launch
-ordering for L2 reuse -- does not show a measurable benefit anywhere in
-this session's measurements**, end-to-end or in the token-count sweep.
-This is a null result the plan's own risk section predicted before this
-run happened (unbatched decode gives too few routed rows per expert for
-a persistent CTA's tile-group reuse to matter), and the micro-benchmark
-built specifically to surface where it *would* pay off doesn't find that
-point within the swept range either (1 to 2048 tokens). Two honest
-readings: (1) real serving traffic is usually batched well past 2048
-tokens per step, a regime this sweep doesn't reach, so the result may
-simply not generalize past this project's own single-request decode
-scope; or (2) `GROUP_SIZE_M=8`, fixed and untuned per this project's
-explicit scope decision, may not suit this model's 64-expert, 6-per-token
-routing shape regardless of batch size. Both are real possibilities this
-data cannot distinguish between, and Phase 1's stated scope (naive then
-persistent, not autotuning) stops here rather than guessing further.
+ordering for L2 reuse -- shows no benefit at the token count that
+actually drives end-to-end decode throughput (a tie at 1 token, leaning
+slightly toward naive), which is the null result the plan's own risk
+section predicted before this run happened.** This is why the two
+kernels measure statistically indistinguishable end-to-end (20.98 vs.
+20.80 tok/s) despite the persistent kernel's design intent. The full
+micro-benchmark tells a more specific story than a flat "no benefit
+anywhere," though: at 16 and 128 tokens -- above single-token decode but
+still well short of a full batched prefill -- persistent consistently
+wins by 3-8% across both routing distributions and both measurement
+targets, then loses by up to 14% at 512-2048 tokens. That the win sits in
+the *middle* of the swept range rather than growing monotonically with
+token count (and therefore with rows-per-expert) means "not enough tiles
+yet" cannot be the whole explanation for the 512-2048 regression, since
+2048 tokens gives each expert far more tiles on average than 128 does.
+Two honest readings this data cannot distinguish between: (1) the
+persistent kernel's fixed `GROUP_SIZE_M=8` may be well-matched to a
+narrow middle band of tile counts for this model's 64-expert shape and
+mismatched outside it in either direction, in which case autotuning
+`GROUP_SIZE_M` per token count -- explicitly out of Phase 1's scope --
+might recover the 512-2048 loss; or (2) some other per-launch overhead
+(e.g. the persistent kernel's fixed `(NUM_SMS,)` grid doing more
+scheduling work per program as the total tile count grows) dominates at
+the larger token counts regardless of tile density. Phase 1's stated
+scope (naive then persistent, not autotuning) stops here rather than
+guessing further, but real serving traffic that keeps individual
+requests near single-token decode steps (this project's own scope) would
+not see the mid-range win either way -- the end-to-end number above is
+the one that matters for that regime, and it shows no persistent-kernel
+advantage.

@@ -153,10 +153,12 @@ torch's) so the patched path is proven against DeepSeek's real inference
 code, not a paraphrase. 17 new/changed tests across
 `test_integration.py`, `test_reference.py`, and `test_run_baseline.py` (3
 of them `slow`, downloading `hf-internal-testing/tiny-random-gpt2` from
-Hugging Face Hub); full non-GPU suite is 72 passed + 1 skipped (the skip
-is the pre-existing Triton-is-Linux-only guard in
-`test_grouped_gemm_kernel.py`, unrelated to this task). Task 8's review
-found four Important hardening gaps in this exact code path (fixed
+Hugging Face Hub); full non-GPU suite was 72 passed + 1 skipped at
+Task 8's initial commit (the skip is the pre-existing Triton-is-Linux-only
+guard in `test_grouped_gemm_kernel.py`, unrelated to this task; the
+72 -> 73 in the count above is one more test added during Task 8's own
+review-fix rounds, below). Task 8's review found four Important
+hardening gaps in this exact code path (fixed
 across two rounds before Task 9 ran on it): evidence written before a
 bad `--compare-reference` could raise and lose it; `patch_moe_infer`
 forcing eval mode so a training-mode model can't report a nonzero
@@ -175,12 +177,13 @@ a cross-session sanity check). Kernel-backed: **naive 20.98 tokens/sec
 mutual top-5 and top-1 logit agreement across every tested position (3
 prompts x 5 repetitions x 64 new tokens, bf16). Cost per 1M generated
 tokens: $18.15 (stock) -> $10.86 (naive). A token-count micro-benchmark
-(1-2048 tokens, zipf and uniform routing) found the persistent kernel's
-grouped launch ordering shows **no measurable benefit** over the naive
-kernel anywhere in the swept range -- a null result the plan's own risk
-section predicted before the run happened (unbatched decode gives each
-expert too few rows for L2 tile reuse to matter across a persistent
-CTA's grouped ordering), recorded rather than buried. Full account:
+(1-2048 tokens, zipf and uniform routing) found the persistent kernel
+**ties naive at the 1-token/step granularity that drives decode
+throughput** -- a null result the plan's own risk section predicted
+before the run happened (unbatched decode gives each expert too few rows
+for L2 tile reuse to matter) -- but wins 3-8% at 16-128 tokens and loses
+by up to 14% at 512-2048, a workload-specific result recorded rather than
+buried. Full account:
 `docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
 
 **Total Phase 1 GPU cost: $0.65** across both paid sessions ($0.0606

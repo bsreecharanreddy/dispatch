@@ -33,12 +33,13 @@ once a phase's exit criteria are actually met).
     eager-mode decode, 3 prompts x 5 repetitions, 64 new tokens — same
     config as Phase 0's baseline). Cost per 1M generated tokens: $18.15
     (stock) -> $10.86 (naive). A token-count micro-benchmark (1 to 2048
-    tokens, zipf and uniform routing) found the persistent kernel's
-    grouped launch ordering shows no measurable benefit over the naive
-    kernel anywhere in the swept range — a null result the plan's own
-    risk section predicted before the run happened (unbatched decode
-    gives each expert too few rows for L2 reuse to matter), recorded
-    rather than buried. Total GPU cost across both sessions: **$0.65**.
+    tokens, zipf and uniform routing) found the persistent kernel ties
+    naive at the 1-token/step granularity that drives decode throughput
+    (unbatched decode gives each expert too few rows for L2 reuse to
+    matter, exactly as the plan's own risk section predicted before the
+    run happened), wins 3-8% at 16-128 tokens, then loses by up to 14% at
+    512-2048 — a workload-specific result recorded rather than buried.
+    Total GPU cost across both sessions: **$0.65**.
     Full account: `docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
 - **Phase 0 (baseline) complete**, 2026-09-14
   (`docs/plans/2026-09-14-phase-0-baseline-plan.md`). Built and tested: a
