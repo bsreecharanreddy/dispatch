@@ -93,10 +93,16 @@ suite can fail, and the fix restores it.
 $0.0606 for 991 seconds (16.5 minutes) of RTX 3090 rental at $0.22/hr --
 well under the $3 cap. Full record:
 `docs/findings/2026-09-15-phase-1-kernel-correctness-cost.md`. Duration
-provenance: pod `createdAt` was `2026-09-15T15:43:56.898Z` (from the
-create-pod response's `startedAt` field); wall-clock at the point of
-`delete-pod` was `2026-09-15T16:00:27Z` (local `date -u`, immediately
-before the terminate call) -- 991.25s between them, rounded to 991s.
+provenance: measured directly as `datetime.now(timezone.utc) -
+<pod's API-reported start time>` (start: `2026-09-15T15:43:56Z`, from
+the create-pod response's `startedAt` field) immediately before invoking
+`terminate`, yielding `991.247984` seconds -- rounded to 991s by
+`write_cost_record`. (An earlier draft of this note cross-referenced a
+separate `date -u` print taken moments earlier in the same session for a
+sanity check; that print was not the value actually used in the
+duration computation and the two do not reconcile to the second, so it
+has been removed from this citation to avoid implying a derivation that
+isn't the one that produced the committed number.)
 
 Pod `sta1ejhhrg5bc4` terminated via `delete-pod`; termination verified
 independently by re-querying the pod afterward, which returned `404 pod
