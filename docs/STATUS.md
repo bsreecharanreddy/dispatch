@@ -99,7 +99,7 @@ Plan: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`. Branch
 - [x] Task 4: Naive Triton grouped-GEMM kernel -- GPU-verified in Task 6
 - [x] Task 5: Persistent, cache-aware kernel -- GPU-verified in Task 6
 - [x] Task 6: Kernel correctness session on a rented GPU (runbook session A)
-- [ ] Task 7: Backend registry + kernel micro-benchmark CLI
+- [x] Task 7: Backend registry + kernel micro-benchmark CLI (`backends.py`, `bench.py`, `scripts/run_kernel_bench.py`)
 - [ ] Task 8: Real-model integration (`--moe-kernel`, `--compare-reference`)
 - [ ] Task 9: Measured run on an L40 (runbook session B)
 
@@ -115,6 +115,19 @@ weights) turned 24/25 tests red, confirmed the revert was clean, and
 reran green -- the suite can fail. Cost: **$0.0606** for 991s of RTX 3090
 rental. Full account: `docs/findings/2026-09-15-phase-1-kernel-correctness.md`.
 
+Task 7 adds `dispatch.kernels.backends` (`BACKENDS = ("torch", "naive",
+"persistent")` and `resolve_backend`, which imports the Triton kernel
+module lazily so the registry itself stays importable without triton) and
+`dispatch.kernels.bench` (pure-math helpers -- FLOPs, latency-summary
+dataclass, synthetic zipf/uniform routing -- plus `time_grouped_gemm`,
+the one function that imports `triton.testing` locally). `scripts/run_kernel_bench.py`
+is the CLI: times every backend's whole routed-MoE layer and its
+gate_proj-shaped grouped GEMM alone on synthetic DeepSeekMoE-16B-shaped
+work, refuses to time a backend that disagrees with the eager torch
+backend on the benchmark's own input, and writes config + results JSON to
+`docs/findings/`. All CPU-testable (11 new tests, 62 passed + 1 skipped
+total); the real timed run happens in Task 9's runbook, on a GPU host.
+
 ## Next step
 
-Task 7 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
+Task 8 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
