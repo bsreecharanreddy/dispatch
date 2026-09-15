@@ -15,6 +15,8 @@ dependencies = [
     "accelerate>=1.15.0",
     "huggingface_hub>=1.31.0",
     "safetensors>=0.8.0",
+    # Linux-only: triton publishes manylinux wheels and nothing else.
+    "triton>=3.8.0; sys_platform == 'linux'",
 ]
 
 # Runtime dependencies (torch, triton, the serving stack) get added as each
@@ -48,12 +50,22 @@ max-complexity = 10
 [tool.ruff.lint.per-file-ignores]
 # Comparing against expected literals is normal and readable in tests.
 "tests/**/*.py" = ["PLR2004", "PLR0913"]
+# Triton kernel signatures are pointer/stride/tile-size lists by construction,
+# and Triton's convention is UPPER_CASE for tl.constexpr arguments.
+"src/dispatch/kernels/grouped_gemm.py" = ["N803", "PLR0913", "PLR0917"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 warn_unreachable = true
 mypy_path = "src"
+
+# Triton isn't installed at all on macOS. Skipping it makes mypy treat it as
+# Any everywhere, so the Mac and Linux CI give the same answer.
+[[tool.mypy.overrides]]
+module = ["triton", "triton.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.coverage.run]
 source = ["src/dispatch"]

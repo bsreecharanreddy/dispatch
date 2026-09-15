@@ -96,7 +96,7 @@ Plan: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`. Branch
 - [x] Task 1: Pure-PyTorch MoE reference (`src/dispatch/kernels/reference_moe.py`)
 - [x] Task 2: Token grouping + tile schedule (`grouping.py`, `tile_schedule.py`)
 - [x] Task 3: Eager grouped MoE path -- the grouped-GEMM contract (`moe_forward.py`)
-- [ ] Task 4: Naive Triton grouped-GEMM kernel -- written; GPU-verified in Task 6
+- [x] Task 4: Naive Triton grouped-GEMM kernel -- written; GPU-verified in Task 6
 - [ ] Task 5: Persistent, cache-aware kernel -- written; GPU-verified in Task 6
 - [ ] Task 6: Kernel correctness session on a rented GPU (runbook session A)
 - [ ] Task 7: Backend registry + kernel micro-benchmark CLI
@@ -105,4 +105,4 @@ Plan: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`. Branch
 
 ## Next step
 
-Task 4 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
+Task 5 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
