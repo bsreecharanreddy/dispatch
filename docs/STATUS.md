@@ -88,10 +88,109 @@ design; the file exists locally but Phase 1 regenerates it from
 See `docs/findings/2026-09-14-phase-0-baseline-run.md` for the full
 account.
 
+## Phase 1 progress
+
+Plan: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`. Branch
+`phase-1-grouped-gemm`, pushed once as a single PR when the phase is done.
+
+- [x] Task 1: Pure-PyTorch MoE reference (`src/dispatch/kernels/reference_moe.py`)
+- [x] Task 2: Token grouping + tile schedule (`grouping.py`, `tile_schedule.py`)
+- [x] Task 3: Eager grouped MoE path -- the grouped-GEMM contract (`moe_forward.py`)
+- [x] Task 4: Naive Triton grouped-GEMM kernel -- GPU-verified in Task 6
+- [x] Task 5: Persistent, cache-aware kernel -- GPU-verified in Task 6
+- [x] Task 6: Kernel correctness session on a rented GPU (runbook session A)
+- [x] Task 7: Backend registry + kernel micro-benchmark CLI (`backends.py`, `bench.py`, `scripts/run_kernel_bench.py`)
+- [x] Task 8: Real-model integration (`--moe-kernel`, `--compare-reference`)
+- [x] Task 9: Measured run on an L40 (runbook session B)
+
+**Phase 1 is complete.** All 9 tasks done, `make check` green throughout
+(73 tests, lint and `mypy --strict` clean).
+
+Task 6's rented-GPU session (2026-09-15, RTX 3090 substituted for the
+originally-quoted RTX A4000, which sold out at deploy time): both the
+naive and persistent Triton kernels passed **25/25** GPU correctness
+tests on the first real execution -- no kernel bugs found, an unusually
+clean outcome. One real, non-kernel bug found and fixed: a
+`requires_grad`-related warning in `assert_matches_reference`
+(`moe_forward.py`), first surfaced by a real gradient-carrying tensor on
+a real device. A mutation check (forcing every tile to read expert 0's
+weights) turned 24/25 tests red, confirmed the revert was clean, and
+reran green -- the suite can fail. Cost: **$0.0606** for 991s of RTX 3090
+rental. Full account: `docs/findings/2026-09-15-phase-1-kernel-correctness.md`.
+
+Task 7 adds `dispatch.kernels.backends` (`BACKENDS = ("torch", "naive",
+"persistent")` and `resolve_backend`, which imports the Triton kernel
+module lazily so the registry itself stays importable without triton) and
+`dispatch.kernels.bench` (pure-math helpers -- FLOPs, latency-summary
+dataclass, synthetic zipf/uniform routing -- plus `time_grouped_gemm`,
+the one function that imports `triton.testing` locally). `scripts/run_kernel_bench.py`
+is the CLI: times every backend's whole routed-MoE layer and its
+gate_proj-shaped grouped GEMM alone on synthetic DeepSeekMoE-16B-shaped
+work, refuses to time a backend that disagrees with the eager torch
+backend on the benchmark's own input, and writes config + results JSON to
+`docs/findings/`. All CPU-testable (11 new tests, 62 passed + 1 skipped
+total); the real timed run happens in Task 9's runbook, on a GPU host.
+
+Task 8 adds `dispatch.kernels.integration` (`patch_moe_infer`, which walks
+a loaded model's modules and replaces each MoE layer's `moe_infer` --
+DeepSeek's own remote-code inference method -- with a closure over
+`grouped_moe_routed` and a stacked-weights view of that layer's experts;
+rejects an `experts` attribute that isn't an `nn.ModuleList`) and, in
+`dispatch.benchmark.reference`, `TopKAgreement`/`compare_top_k_agreement`
+-- a kernel-swap-shaped comparison (top-1 agreement, mutual top-k
+membership, max abs diff) that tolerates a near-tie flip but flags an
+argmax that lands outside the other side's top-k. `compare_within_tolerance`
+was refactored to share the key-mismatch check via a new `_require_same_keys`
+helper, with no behavior change. `scripts/run_baseline.py` gained
+`--moe-kernel` (patches the resolved backend into the model before timing;
+raises if it patches zero layers, so a kernel run can never silently time
+the stock model) and `--compare-reference` (compares the run's logits
+against a stock run's file and exits non-zero on disagreement, but only
+*after* the results JSON and reference safetensors are written to disk).
+The `FakeDeepseekMoE` test harness in `test_integration.py` transcribes
+DeepSeek's actual `moe_infer` body (only numpy's cumsum swapped for
+torch's) so the patched path is proven against DeepSeek's real inference
+code, not a paraphrase. 17 new/changed tests across
+`test_integration.py`, `test_reference.py`, and `test_run_baseline.py` (3
+of them `slow`, downloading `hf-internal-testing/tiny-random-gpt2` from
+Hugging Face Hub); full non-GPU suite was 72 passed + 1 skipped at
+Task 8's initial commit (the skip is the pre-existing Triton-is-Linux-only
+guard in `test_grouped_gemm_kernel.py`, unrelated to this task; the
+72 -> 73 in the count above is one more test added during Task 8's own
+review-fix rounds, below). Task 8's review found four Important
+hardening gaps in this exact code path (fixed
+across two rounds before Task 9 ran on it): evidence written before a
+bad `--compare-reference` could raise and lose it; `patch_moe_infer`
+forcing eval mode so a training-mode model can't report a nonzero
+patched count while never executing the patched path; a corrected
+bidirectional test for `mutual_top_k`; and stale "Phase 0" defaults on
+what is now a multi-phase CLI.
+
+**Task 9's measured run** (2026-09-15, NVIDIA L40, RunPod Secure Cloud,
+$0.82/hr, $0.59 total for 43.3 minutes -- same GPU class as Phase 0, so
+the comparison holds): both kernels re-verified correct on this card
+(25/25, 0 skipped), then swapped into `deepseek-ai/deepseek-moe-16b-base`'s
+real 27 MoE layers. Stock throughput **12.55 tokens/sec** (consistent
+with Phase 0's separately-measured 12.75 tokens/sec on the same config --
+a cross-session sanity check). Kernel-backed: **naive 20.98 tokens/sec
+(+67.2%)**, **persistent 20.80 tokens/sec (+65.7%)**, both at perfect
+mutual top-5 and top-1 logit agreement across every tested position (3
+prompts x 5 repetitions x 64 new tokens, bf16). Cost per 1M generated
+tokens: $18.15 (stock) -> $10.86 (naive). A token-count micro-benchmark
+(1-2048 tokens, zipf and uniform routing) found the persistent kernel
+**ties naive at the 1-token/step granularity that drives decode
+throughput** -- a null result the plan's own risk section predicted
+before the run happened (unbatched decode gives each expert too few rows
+for L2 tile reuse to matter) -- but wins 3-8% at 16-128 tokens and loses
+by up to 14% at 512-2048, a workload-specific result recorded rather than
+buried. Full account:
+`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
+
+**Total Phase 1 GPU cost: $0.65** across both paid sessions ($0.0606
+kernel correctness + $0.5916 the measured run) -- both well under their
+stated caps ($3 and $5 respectively).
+
 ## Next step
 
-Push the `phase-0-baseline` branch and open the phase's single PR, per
-this repo's one-branch-per-phase convention -- the whole phase (plan doc
-and all 8 tasks) goes up together now that it's done. Then begin Phase 1
-(custom Triton grouped-GEMM kernel), whose own implementation plan gets
-written first, same as Phase 0's did.
+Phase 1 is complete and ready to push as a single PR (per this repo's
+one-branch-per-phase convention). Phase 2 is not yet planned.

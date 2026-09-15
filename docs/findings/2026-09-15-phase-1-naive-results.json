@@ -1,0 +1,33 @@
+{
+  "model": "deepseek-ai/deepseek-moe-16b-base",
+  "device": "cuda",
+  "dtype": "bfloat16",
+  "moe_kernel": "naive",
+  "moe_layers_patched": 27,
+  "run_count": 15,
+  "mean_ttft": 0.1123014186664174,
+  "p50_ttft": 0.046653364988742396,
+  "p99_ttft": 0.8896511012822151,
+  "mean_inter_token_latency": 0.047049394129096686,
+  "mean_tokens_per_second": 20.983746292736587,
+  "reference_comparison": {
+    "prompt_000_logits": {
+      "positions": 11,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 2.013671875
+    },
+    "prompt_001_logits": {
+      "positions": 11,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.65625
+    },
+    "prompt_002_logits": {
+      "positions": 7,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 1.4671630859375
+    }
+  }
+}

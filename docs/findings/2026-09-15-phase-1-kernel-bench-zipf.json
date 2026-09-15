@@ -1,0 +1,258 @@
+{
+  "config": {
+    "hidden_size": 2048,
+    "moe_intermediate_size": 1408,
+    "n_routed_experts": 64,
+    "num_experts_per_tok": 6,
+    "distribution": "zipf",
+    "dtype": "bfloat16",
+    "block_m": 16,
+    "seed": 0,
+    "do_bench_warmup_ms": 25,
+    "do_bench_rep_ms": 100,
+    "gpu": "NVIDIA L40",
+    "torch": "2.14.0+cu130",
+    "cuda": "13.0",
+    "triton": "3.8.0",
+    "block_n": 64,
+    "block_k": 64,
+    "group_size_m": 8
+  },
+  "results": [
+    {
+      "num_tokens": 1,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 1.1036542120264536,
+          "p50_latency_ms": 1.1146399974822998,
+          "p99_latency_ms": 1.2034790575504306,
+          "tflops": 0.0940593737320977
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 0.10341779749824087,
+          "p50_latency_ms": 0.10326399654150009,
+          "p99_latency_ms": 0.10593984201550484,
+          "tflops": 0.33459432357944574
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 0.5113120007018248,
+          "p50_latency_ms": 0.5001599788665771,
+          "p99_latency_ms": 0.6666406452655792,
+          "tflops": 0.20302481431594044
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.07787105882493388,
+          "p50_latency_ms": 0.07843200117349625,
+          "p99_latency_ms": 0.08066207826137542,
+          "tflops": 0.44436288040968963
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 0.5178495983282725,
+          "p50_latency_ms": 0.5093759894371033,
+          "p99_latency_ms": 0.5305919885635376,
+          "tflops": 0.20046172544135862
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.07851487878226834,
+          "p50_latency_ms": 0.0785440020263195,
+          "p99_latency_ms": 0.0804803218692541,
+          "tflops": 0.44071911638504213
+        }
+      ]
+    },
+    {
+      "num_tokens": 16,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 5.319241439594942,
+          "p50_latency_ms": 5.308832168579102,
+          "p99_latency_ms": 5.87841905593872,
+          "tflops": 0.31225211392669555
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 1.4339834650357564,
+          "p50_latency_ms": 1.4413440227508545,
+          "p99_latency_ms": 1.477911021709442,
+          "tflops": 0.3860910125530595
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 1.4335247801061262,
+          "p50_latency_ms": 1.4291519522666931,
+          "p99_latency_ms": 1.4620793795585634,
+          "tflops": 1.1586436502876758
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.453940060823711,
+          "p50_latency_ms": 0.4533439874649048,
+          "p99_latency_ms": 0.45563744246959687,
+          "tflops": 1.2196502925856787
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 1.3927576925794958,
+          "p50_latency_ms": 1.3872320055961609,
+          "p99_latency_ms": 1.4017874932289125,
+          "tflops": 1.1925580399586964
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.44004321207095237,
+          "p50_latency_ms": 0.4397760033607483,
+          "p99_latency_ms": 0.44178432106971743,
+          "tflops": 1.2581676362973417
+        }
+      ]
+    },
+    {
+      "num_tokens": 128,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 8.898149837147106,
+          "p50_latency_ms": 8.86308765411377,
+          "p99_latency_ms": 10.14309422492981,
+          "tflops": 1.4932941471190386
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 2.562710850579398,
+          "p50_latency_ms": 2.5200319290161133,
+          "p99_latency_ms": 5.0844722366333,
+          "tflops": 1.728320236751881
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 2.181175196170807,
+          "p50_latency_ms": 2.1743520498275757,
+          "p99_latency_ms": 2.220066313743591,
+          "tflops": 6.091924708903328
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.6920069035361794,
+          "p50_latency_ms": 0.6913920044898987,
+          "p99_latency_ms": 0.6956128066778183,
+          "tflops": 6.4004925404164466
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 2.084717722166152,
+          "p50_latency_ms": 2.0748640298843384,
+          "p99_latency_ms": 2.1164408898353577,
+          "tflops": 6.373791008114709
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.6377914002008527,
+          "p50_latency_ms": 0.6373760104179382,
+          "p99_latency_ms": 0.6387801504135132,
+          "tflops": 6.944566864032919
+        }
+      ]
+    },
+    {
+      "num_tokens": 512,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 9.956003284454345,
+          "p50_latency_ms": 9.384991645812988,
+          "p99_latency_ms": 9.619068260192872,
+          "tflops": 5.338509718150719
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 2.7373630106449127,
+          "p50_latency_ms": 2.6761600971221924,
+          "p99_latency_ms": 3.009832935333252,
+          "tflops": 6.472192408206027
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 2.2740134753678976,
+          "p50_latency_ms": 2.268623948097229,
+          "p99_latency_ms": 2.3903013920784,
+          "tflops": 23.372869538251607
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.7007404804229737,
+          "p50_latency_ms": 0.7012639939785004,
+          "p99_latency_ms": 0.8022761833667759,
+          "tflops": 25.282883736509707
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 2.4894820417676655,
+          "p50_latency_ms": 2.4778239727020264,
+          "p99_latency_ms": 2.513782322406769,
+          "tflops": 21.349911104504493
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.7189824623290939,
+          "p50_latency_ms": 0.718783974647522,
+          "p99_latency_ms": 0.7217919826507568,
+          "tflops": 24.641407856608694
+        }
+      ]
+    },
+    {
+      "num_tokens": 2048,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 10.102343029446072,
+          "p50_latency_ms": 9.871232032775879,
+          "p99_latency_ms": 10.33627773284912,
+          "tflops": 21.044710175878603
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 2.678281009197235,
+          "p50_latency_ms": 2.640447974205017,
+          "p99_latency_ms": 2.9038604760169986,
+          "tflops": 26.45986740772995
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 4.626200380779448,
+          "p50_latency_ms": 5.2260801792144775,
+          "p99_latency_ms": 5.354499931335449,
+          "tflops": 45.95583062836976
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 1.5662090939990545,
+          "p50_latency_ms": 1.5787039995193481,
+          "p99_latency_ms": 1.6449814140796661,
+          "tflops": 45.2474453478322
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 5.286112054189046,
+          "p50_latency_ms": 5.209903955459595,
+          "p99_latency_ms": 5.395663452148438,
+          "tflops": 40.21876172366073
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 1.6175354451968753,
+          "p50_latency_ms": 1.5905920267105103,
+          "p99_latency_ms": 1.6204710388183594,
+          "tflops": 43.81168931687588
+        }
+      ]
+    }
+  ]
+}
