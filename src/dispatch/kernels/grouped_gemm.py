@@ -20,6 +20,7 @@ from dispatch.kernels.tile_schedule import TileSchedule
 MIN_BLOCK_M = 16  # tl.dot's smallest tile dimension
 DEFAULT_BLOCK_N = 64
 DEFAULT_BLOCK_K = 64
+DEFAULT_GROUP_SIZE_M = 8
 
 
 @triton.jit  # type: ignore[untyped-decorator]
@@ -118,6 +119,61 @@ def _grouped_matmul_kernel(  # type: ignore[no-untyped-def]
     )
 
 
+@triton.jit  # type: ignore[untyped-decorator]
+def _grouped_matmul_persistent_kernel(  # type: ignore[no-untyped-def]
+    x_ptr,
+    w_ptr,
+    out_ptr,
+    tile_expert_ptr,
+    tile_row_start_ptr,
+    tile_valid_rows_ptr,
+    num_m_tiles,
+    n,
+    k,
+    stride_xm,
+    stride_xk,
+    stride_we,
+    stride_wn,
+    stride_wk,
+    stride_om,
+    stride_on,
+    NUM_SMS: tl.constexpr,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    BLOCK_K: tl.constexpr,
+    GROUP_SIZE_M: tl.constexpr,
+):
+    num_n_tiles = tl.cdiv(n, BLOCK_N)
+    tiles_per_group = GROUP_SIZE_M * num_n_tiles
+    for tile_id in tl.range(tl.program_id(axis=0), num_m_tiles * num_n_tiles, NUM_SMS):
+        first_m_tile = (tile_id // tiles_per_group) * GROUP_SIZE_M
+        group_rows = tl.minimum(num_m_tiles - first_m_tile, GROUP_SIZE_M)
+        m_tile = first_m_tile + (tile_id % tiles_per_group) % group_rows
+        n_tile = (tile_id % tiles_per_group) // group_rows
+        _matmul_tile(
+            x_ptr,
+            w_ptr,
+            out_ptr,
+            tile_expert_ptr,
+            tile_row_start_ptr,
+            tile_valid_rows_ptr,
+            m_tile,
+            n_tile,
+            n,
+            k,
+            stride_xm,
+            stride_xk,
+            stride_we,
+            stride_wn,
+            stride_wk,
+            stride_om,
+            stride_on,
+            BLOCK_M,
+            BLOCK_N,
+            BLOCK_K,
+        )
+
+
 def grouped_matmul(
     x: torch.Tensor,
     expert_weight: torch.Tensor,
@@ -147,6 +203,44 @@ def grouped_matmul(
         BLOCK_M=schedule.block_m,
         BLOCK_N=block_n,
         BLOCK_K=block_k,
+    )
+    return out
+
+
+def grouped_matmul_persistent(
+    x: torch.Tensor,
+    expert_weight: torch.Tensor,
+    schedule: TileSchedule,
+    *,
+    block_n: int = DEFAULT_BLOCK_N,
+    block_k: int = DEFAULT_BLOCK_K,
+    group_size_m: int = DEFAULT_GROUP_SIZE_M,
+) -> torch.Tensor:
+    """One long-lived CTA per SM, each looping over (m_tile, n_tile) work in
+    L2-friendly grouped order instead of one launch-slot per tile."""
+    out = _validated_output(x, expert_weight, schedule)
+    if schedule.num_tiles == 0:
+        return out
+    n, k = expert_weight.shape[1], expert_weight.shape[2]
+    num_sms = torch.cuda.get_device_properties(x.device).multi_processor_count
+    _grouped_matmul_persistent_kernel[(num_sms,)](
+        x,
+        expert_weight,
+        out,
+        schedule.tile_expert,
+        schedule.tile_row_start,
+        schedule.tile_valid_rows,
+        schedule.num_tiles,
+        n,
+        k,
+        *x.stride(),
+        *expert_weight.stride(),
+        *out.stride(),
+        NUM_SMS=num_sms,
+        BLOCK_M=schedule.block_m,
+        BLOCK_N=block_n,
+        BLOCK_K=block_k,
+        GROUP_SIZE_M=group_size_m,
     )
     return out
 

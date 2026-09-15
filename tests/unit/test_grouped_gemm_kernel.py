@@ -34,7 +34,7 @@ SM80 = pytest.mark.skipif(
     reason="bf16 tensor-core matmul needs compute capability 8.0+ (Ampere or newer)",
 )
 DTYPES = [torch.float16, pytest.param(torch.bfloat16, marks=SM80)]
-KERNELS = ["grouped_matmul"]
+KERNELS = ["grouped_matmul", "grouped_matmul_persistent"]
 
 TOY_DIMS = MoEConfig(
     hidden_size=8,
