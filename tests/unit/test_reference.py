@@ -73,6 +73,15 @@ def test_compare_top_k_agreement_flags_an_argmax_outside_the_top_k() -> None:
     assert not compare_top_k_agreement(actual, reference)["p"].mutual_top_k
 
 
+def test_compare_top_k_agreement_flags_the_reference_argmax_outside_actuals_top_k() -> None:
+    """The mirror of the case above: mutual_top_k must check both directions,
+    not just whether actual's argmax lands in reference's top-k."""
+    reference = {"p": torch.tensor([[0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 9.0]])}
+    actual = {"p": torch.tensor([[5.0, 4.0, 3.0, 2.0, 1.0, 0.0, 0.0]])}
+
+    assert not compare_top_k_agreement(actual, reference)["p"].mutual_top_k
+
+
 def test_compare_top_k_agreement_rejects_shape_mismatch() -> None:
     with pytest.raises(ValueError, match="shape mismatch"):
         compare_top_k_agreement({"p": torch.zeros(2, 6)}, {"p": torch.zeros(3, 6)})

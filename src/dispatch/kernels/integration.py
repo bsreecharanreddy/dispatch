@@ -21,7 +21,15 @@ MoEInfer = Callable[[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor]
 
 
 def patch_moe_infer(model: torch.nn.Module, matmul: GroupedMatmul, *, block_m: int = 16) -> int:
-    """Returns how many MoE layers were patched, for the caller to check."""
+    """Returns how many MoE layers were patched, for the caller to check.
+
+    Forces the model into eval mode first: DeepSeek's own DeepseekMoE.forward
+    only calls moe_infer on the not-self.training branch, so a model left in
+    training mode would report a nonzero patched count while never actually
+    executing the patched path -- silently comparing the stock model against
+    itself rather than against the kernel.
+    """
+    model.eval()
     patched = 0
     for module in model.modules():
         if not hasattr(module, "moe_infer"):

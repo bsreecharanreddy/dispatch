@@ -69,7 +69,7 @@ def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-faci
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Run dispatch's Phase 0 baseline benchmark")
+    parser = argparse.ArgumentParser(description="Run dispatch's latency/throughput benchmark")
     parser.add_argument("--model-name", default="deepseek-ai/deepseek-moe-16b-base")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--dtype", default="bfloat16", choices=["float32", "bfloat16", "float16"])
@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--max-new-tokens", type=int, default=64)
     parser.add_argument("--output-dir", type=Path, default=Path("docs/findings"))
-    parser.add_argument("--run-label", default=time.strftime("%Y-%m-%d-phase-0-baseline"))
+    parser.add_argument("--run-label", default=time.strftime("%Y-%m-%d-baseline"))
     parser.add_argument("--moe-kernel", default="none", choices=["none", *BACKENDS])
     parser.add_argument(
         "--compare-reference",
@@ -99,13 +99,22 @@ def main(argv: list[str] | None = None) -> None:
         moe_kernel=args.moe_kernel,
     )
     summary = summarize(runs)
+
+    # The logits are written before comparing against --compare-reference: a
+    # mistyped path or a shape/key mismatch raises out of load_reference or
+    # compare_top_k_agreement, and this run's own (expensive to reproduce)
+    # evidence must survive that rather than being lost with it.
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    reference_path = args.output_dir / f"{args.run_label}-reference.safetensors"
+    save_reference(logits, reference_path)
+    print(f"wrote {reference_path}")
+
     comparison = (
         compare_top_k_agreement(logits, load_reference(args.compare_reference))
         if args.compare_reference is not None
         else {}
     )
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
     results_path = args.output_dir / f"{args.run_label}-results.json"
     results_path.write_text(
         json.dumps(
@@ -121,12 +130,7 @@ def main(argv: list[str] | None = None) -> None:
             indent=2,
         )
     )
-
-    reference_path = args.output_dir / f"{args.run_label}-reference.safetensors"
-    save_reference(logits, reference_path)
-
     print(f"wrote {results_path}")
-    print(f"wrote {reference_path}")
 
     if not all(value.mutual_top_k for value in comparison.values()):
         raise SystemExit(
