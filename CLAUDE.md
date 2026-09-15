@@ -47,8 +47,8 @@ updates **in the same commit as the work it describes**.
 
 ## Current status
 
-**Phase 0 (baseline) is complete, 2026-09-14**, on the `phase-0-baseline`
-branch (not yet pushed/PR'd — see `docs/STATUS.md`'s Next step). RunPod
+**Phase 0 (baseline) is complete, 2026-09-14**, and merged to `main` via
+PR #1. RunPod
 provisioning, the benchmark harness, and reference-logit capture are built
 and tested (`make check` green, 26 tests). The one real rented-GPU run
 (Task 8) measured **12.75 tokens/sec, 0.355s mean TTFT** for
@@ -57,6 +57,9 @@ after finding and fixing three real environment bugs along the way (a
 `transformers` version break in DeepSeek's own remote code, a second break
 in the same file one release earlier, and a model-cache-on-the-wrong-disk
 trap). Full account: `docs/findings/2026-09-14-phase-0-baseline-run.md`.
+
+**Phase 1 (custom Triton grouped-GEMM kernel) is planned, not started**:
+`docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
 
 ## One governing principle
 

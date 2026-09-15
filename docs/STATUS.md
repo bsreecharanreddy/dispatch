@@ -90,8 +90,10 @@ account.
 
 ## Next step
 
-Push the `phase-0-baseline` branch and open the phase's single PR, per
-this repo's one-branch-per-phase convention -- the whole phase (plan doc
-and all 8 tasks) goes up together now that it's done. Then begin Phase 1
-(custom Triton grouped-GEMM kernel), whose own implementation plan gets
-written first, same as Phase 0's did.
+Phase 0 is merged to `main` (PR #1). Phase 1's implementation plan is
+written: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md` -- 9 tasks:
+a CPU-tested MoE reference and grouped-layout contract, naive and
+persistent Triton grouped-GEMM kernels, a rented-GPU correctness session,
+a kernel benchmark CLI, real-model integration, then the measured run on
+the same GPU class as Phase 0. Next: create the `phase-1-grouped-gemm`
+branch, commit the plan as its first commit, and start Task 1.
