@@ -6,7 +6,12 @@ execution, multi-GPU expert-parallel serving, and disaggregated
 prefill/decode, benchmarked against production serving engines (vLLM,
 SGLang) on real, measured throughput/latency/cost numbers, not estimates.
 
-**Status: design written, no code yet.** See
+**Status: Phase 0 (baseline) complete.** Measured
+**12.75 tokens/sec, 0.355s mean time-to-first-token** for
+`deepseek-ai/deepseek-moe-16b-base` (bf16, single NVIDIA L40, unbatched
+eager-mode decode) — the "before" number every later kernel optimization
+gets measured against, plus the reference logits Phase 1's kernel
+correctness checks will use. See
 [`docs/design/2026-09-14-dispatch-system-design.md`](docs/design/2026-09-14-dispatch-system-design.md)
 for the architecture — model choice, what's custom vs. reused, the 7-phase
 plan, and explicit scope boundaries — and `docs/STATUS.md` for the

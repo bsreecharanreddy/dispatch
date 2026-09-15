@@ -6,7 +6,7 @@ commit as the work it describes**, never as a follow-up.
 
 ## Current position
 
-**System design at its second pass, 2026-09-14. Still no code.** Design doc
+**System design at its second pass, 2026-09-14.** Design doc
 covers: model choice (deepseek-ai/deepseek-moe-16b-base), architecture
 (custom Triton grouped-GEMM kernel + DeepEP for cross-GPU dispatch +
 standard benchmark tooling against vLLM/SGLang), an 8-phase plan (0-7), cost
@@ -30,9 +30,68 @@ observability, a K8s deployment demoed once) was added specifically because
 it closes gaps found by checking the design against real job postings
 rather than assuming coverage.
 
+## Phase 0 progress
+
+Implementation plan written and reviewed:
+`docs/plans/2026-09-14-phase-0-baseline-plan.md` (8 tasks: RunPod API
+client, pod-wait orchestration + cost logging, provisioning CLI, pure
+benchmark metrics, generation harness, reference-logit capture, baseline
+CLI, then the one real rented-GPU run). Work is happening on the
+`phase-0-baseline` branch per this repo's one-branch-per-phase convention
+-- pushed as a single PR once the phase is done, not before.
+
+- [x] Task 1: RunPod API client (`scripts/gpu/runpod_client.py`)
+- [x] Task 2: Pod-wait orchestration + cost-record logger (`scripts/gpu/provision.py`)
+- [x] Task 3: Provisioning CLI (`scripts/gpu/provision.py` `main()`) -- landed in the same commit as Task 2 (both touch `provision.py` and were written/tested together before the first commit of either)
+- [x] Task 4: Pure benchmark metrics (`src/dispatch/benchmark/metrics.py`)
+- [x] Task 5: Generation harness (`src/dispatch/benchmark/harness.py`)
+- [x] Task 6: Reference-logit capture + tolerance compare (`src/dispatch/benchmark/reference.py`)
+- [x] Task 7: Baseline CLI (`scripts/run_baseline.py`)
+- [x] Task 8: real rented-GPU run executed -- results, reference logits, and
+      cost recorded in `docs/findings/`
+
+**Phase 0 is complete.** All 8 tasks done, `make check` green throughout
+(26 tests, lint and `mypy --strict` clean). One real bug was caught by TDD
+along the way: `TokenTimings.inter_token_latencies` used `zip(...,
+strict=True)` over two sequences of different length by construction
+(`token_times` and `token_times[1:]`), which raises rather than
+pairwise-zips -- fixed to `strict=False` before the first commit touching
+it.
+
+**Task 8's real run found three more bugs, all in the environment rather
+than in `dispatch`'s own code** -- see
+`docs/findings/2026-09-14-phase-0-baseline-run.md` for the full account:
+DeepSeek's `trust_remote_code` modeling file calling a `transformers`
+utility (`is_torch_fx_available`) removed entirely by transformers 5.17.0
+(this repo's pinned floor); the same file calling a `Cache` method
+(`get_usable_length`) already renamed to `get_seq_length` even one release
+before that; and the 32.8GB model download defaulting into the pod's 30GB
+ephemeral container disk rather than the 50GB+ persistent volume. Fixed
+with a transformers 4.57.6 override plus a narrow, pod-local (never
+committed) monkeypatch, and `HF_HOME` redirected to `/workspace`.
+
+**Measured baseline** for `deepseek-ai/deepseek-moe-16b-base`, bf16,
+single NVIDIA L40 (46GB usable), unbatched eager-mode token-by-token
+decode, 15 runs (3 prompts x 5 repetitions, 64 max new tokens):
+**12.75 tokens/sec mean throughput, 0.355s mean time-to-first-token**
+(p50 0.258s, p99 1.588s). Cost: **$0.35** for 25.7 minutes of L40 rental
+(RunPod Secure Cloud, $0.82/hr -- Community's $0.69/hr L40 was out of
+stock at deploy time), all three failed attempts included since the model
+was already cached locally by the second one. Pod verified `TERMINATED`
+independently after deletion. Full record:
+`docs/findings/2026-09-14-phase-0-baseline-results.json` and
+`2026-09-15-phase-0-baseline-cost.md` (both committed). The reference
+logits (`-reference.safetensors`, Phase 1's correctness oracle) are
+**not** committed -- `.gitignore` excludes `*.safetensors` repo-wide by
+design; the file exists locally but Phase 1 regenerates it from
+`capture_reference_logits` rather than relying on a checked-in blob.
+See `docs/findings/2026-09-14-phase-0-baseline-run.md` for the full
+account.
+
 ## Next step
 
-Write the Phase 0 implementation plan in `docs/plans/` (baseline:
-DeepSeekMoE-16B on one rented GPU, measured latency/throughput as the
-correctness reference), then GPU provisioning scripts in `scripts/gpu/`,
-before any model-serving code lands.
+Push the `phase-0-baseline` branch and open the phase's single PR, per
+this repo's one-branch-per-phase convention -- the whole phase (plan doc
+and all 8 tasks) goes up together now that it's done. Then begin Phase 1
+(custom Triton grouped-GEMM kernel), whose own implementation plan gets
+written first, same as Phase 0's did.
