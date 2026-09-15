@@ -9,8 +9,23 @@ deletes its own evidence is not a retraction.
 
 ## Unreleased
 
-No phase shipped yet.
+No phase shipped yet (`v0.1.0` is still the scaffold version; a tag lands
+once a phase's exit criteria are actually met).
 
+- **Phase 0 (baseline) complete**, 2026-09-14
+  (`docs/plans/2026-09-14-phase-0-baseline-plan.md`). Built and tested: a
+  RunPod REST client and provisioning CLI, a token-by-token-timed
+  generation harness, reference-logit capture, and the baseline CLI tying
+  them together (`make check` green, 26 tests). The real rented-GPU run
+  measured `deepseek-ai/deepseek-moe-16b-base` (bf16, single NVIDIA L40,
+  unbatched eager-mode decode, 15 runs): **12.75 tokens/sec mean
+  throughput, 0.355s mean time-to-first-token** (p50 0.258s, p99 1.588s).
+  Cost: **$0.35** for 25.7 minutes, three failed attempts included — all
+  three were real environment bugs (a `transformers` version break in
+  DeepSeek's own remote code, the same break's cousin one release
+  earlier, and a model-cache-on-the-wrong-disk trap), none in this
+  repo's own code. Full account:
+  `docs/findings/2026-09-14-phase-0-baseline-run.md`.
 - Repo scaffolded: conventions, tooling, and doc structure carried over
   from [almanac](https://github.com/bsreecharanreddy/almanac) and
   [canopica](https://github.com/bsreecharanreddy/canopica) where

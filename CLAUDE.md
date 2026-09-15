@@ -42,16 +42,21 @@ reimplementation; 0002: DeepEP over hand-rolled cross-GPU communication).
 `docs/STATUS.md` is the authoritative record of implementation state —
 updates **in the same commit as the work it describes**.
 
-`docs/plans/` will hold per-phase implementation plans, starting with
-Phase 0, once written.
+`docs/plans/` holds per-phase implementation plans, starting with
+`docs/plans/2026-09-14-phase-0-baseline-plan.md`.
 
 ## Current status
 
-System design written, 2026-09-14 (see `docs/STATUS.md`). Phase 0's
-implementation plan is written
-(`docs/plans/2026-09-14-phase-0-baseline-plan.md`) and its tasks are being
-executed on the `phase-0-baseline` branch. `docs/STATUS.md` carries the
-task-by-task checklist.
+**Phase 0 (baseline) is complete, 2026-09-14**, on the `phase-0-baseline`
+branch (not yet pushed/PR'd — see `docs/STATUS.md`'s Next step). RunPod
+provisioning, the benchmark harness, and reference-logit capture are built
+and tested (`make check` green, 26 tests). The one real rented-GPU run
+(Task 8) measured **12.75 tokens/sec, 0.355s mean TTFT** for
+`deepseek-ai/deepseek-moe-16b-base` on a single L40, for **$0.35** total —
+after finding and fixing three real environment bugs along the way (a
+`transformers` version break in DeepSeek's own remote code, a second break
+in the same file one release earlier, and a model-cache-on-the-wrong-disk
+trap). Full account: `docs/findings/2026-09-14-phase-0-baseline-run.md`.
 
 ## One governing principle
 
