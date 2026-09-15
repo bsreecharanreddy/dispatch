@@ -79,8 +79,10 @@ def grouped_moe_routed(  # noqa: PLR0913 -- routing inputs plus a pluggable GEMM
 def assert_matches_reference(actual: torch.Tensor, expected: torch.Tensor) -> None:
     """assert_close with atol scaled to the reference's magnitude, so an
     output whose values are all tiny cannot pass on absolute tolerance alone."""
-    atol = CORRECTNESS_RTOL * float(expected.abs().max())
-    torch.testing.assert_close(actual.float(), expected.float(), rtol=CORRECTNESS_RTOL, atol=atol)
+    atol = CORRECTNESS_RTOL * float(expected.detach().abs().max())
+    torch.testing.assert_close(
+        actual.detach().float(), expected.detach().float(), rtol=CORRECTNESS_RTOL, atol=atol
+    )
 
 
 def _linear(module: torch.nn.Module, name: str) -> torch.nn.Linear:

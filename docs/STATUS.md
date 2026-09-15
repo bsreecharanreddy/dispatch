@@ -96,13 +96,25 @@ Plan: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`. Branch
 - [x] Task 1: Pure-PyTorch MoE reference (`src/dispatch/kernels/reference_moe.py`)
 - [x] Task 2: Token grouping + tile schedule (`grouping.py`, `tile_schedule.py`)
 - [x] Task 3: Eager grouped MoE path -- the grouped-GEMM contract (`moe_forward.py`)
-- [x] Task 4: Naive Triton grouped-GEMM kernel -- written; GPU-verified in Task 6
-- [x] Task 5: Persistent, cache-aware kernel -- written; GPU-verified in Task 6
-- [ ] Task 6: Kernel correctness session on a rented GPU (runbook session A)
+- [x] Task 4: Naive Triton grouped-GEMM kernel -- GPU-verified in Task 6
+- [x] Task 5: Persistent, cache-aware kernel -- GPU-verified in Task 6
+- [x] Task 6: Kernel correctness session on a rented GPU (runbook session A)
 - [ ] Task 7: Backend registry + kernel micro-benchmark CLI
 - [ ] Task 8: Real-model integration (`--moe-kernel`, `--compare-reference`)
 - [ ] Task 9: Measured run on an L40 (runbook session B)
 
+Task 6's rented-GPU session (2026-09-15, RTX 3090 substituted for the
+originally-quoted RTX A4000, which sold out at deploy time): both the
+naive and persistent Triton kernels passed **25/25** GPU correctness
+tests on the first real execution -- no kernel bugs found, an unusually
+clean outcome. One real, non-kernel bug found and fixed: a
+`requires_grad`-related warning in `assert_matches_reference`
+(`moe_forward.py`), first surfaced by a real gradient-carrying tensor on
+a real device. A mutation check (forcing every tile to read expert 0's
+weights) turned 24/25 tests red, confirmed the revert was clean, and
+reran green -- the suite can fail. Cost: **$0.0606** for 991s of RTX 3090
+rental. Full account: `docs/findings/2026-09-15-phase-1-kernel-correctness.md`.
+
 ## Next step
 
-Task 6 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
+Task 7 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.

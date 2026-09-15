@@ -81,6 +81,22 @@ def test_write_cost_record_computes_cost_and_writes_file(tmp_path: Path) -> None
     assert "phase 0 baseline run" in content
 
 
+def test_write_cost_record_names_the_file_for_its_run(tmp_path: Path) -> None:
+    path = write_cost_record(
+        tmp_path,
+        pod_id="pod_9",
+        gpu_type_id="NVIDIA L40",
+        cost_per_hour=0.82,
+        duration_s=1800.0,
+        note="phase 1 kernel run",
+        run_label="phase-1-grouped-gemm",
+        now=datetime(2026, 9, 20, tzinfo=UTC),
+    )
+
+    assert path.name == "2026-09-20-phase-1-grouped-gemm-cost.md"
+    assert path.read_text().startswith("# phase-1-grouped-gemm -- GPU rental cost")
+
+
 def test_build_parser_create_parses_expected_args() -> None:
     parser = build_parser()
 

@@ -47,14 +47,15 @@ def write_cost_record(  # noqa: PLR0913 -- a cost record has this many independe
     cost_per_hour: float,
     duration_s: float,
     note: str,
+    run_label: str = "phase-0-baseline",
     now: datetime | None = None,
 ) -> Path:
     now = now or datetime.now(UTC)
     cost_usd = cost_per_hour * (duration_s / 3600)
     findings_dir.mkdir(parents=True, exist_ok=True)
-    path = findings_dir / f"{now:%Y-%m-%d}-phase-0-baseline-cost.md"
+    path = findings_dir / f"{now:%Y-%m-%d}-{run_label}-cost.md"
     path.write_text(
-        "# Phase 0 baseline -- GPU rental cost\n\n"
+        f"# {run_label} -- GPU rental cost\n\n"
         f"- Pod: `{pod_id}` ({gpu_type_id})\n"
         f"- Rate: ${cost_per_hour:.4f}/hr\n"
         f"- Duration: {duration_s:.0f}s ({duration_s / 3600:.3f}hr)\n"
