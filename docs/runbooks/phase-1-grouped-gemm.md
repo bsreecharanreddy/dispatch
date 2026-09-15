@@ -75,3 +75,94 @@ Synthetic weights only; no model download; any GPU Triton supports.
    /pods/{id}`) raises `RunPodAPIError` from a `404`, which is a stronger
    confirmation than a status string would be. Expect the 404, not a
    `.status == "TERMINATED"` read.
+
+## Session B -- the measured run (Task 9)
+
+Same GPU class as Phase 0 -- NVIDIA L40 -- so the comparison holds. If no
+L40 is available, stop and ask: switching class silently breaks the
+same-hardware rule that makes these numbers mean anything.
+
+1. Locally: `make check` green, `git status` clean, Tasks 1-8 committed,
+   budget cap stated out loud.
+2. Check whether DeepSeek has changed `modeling_deepseek.py` since Phase 0
+   (https://huggingface.co/deepseek-ai/deepseek-moe-16b-base/commits/main).
+   If it has, the two workarounds below may be unnecessary or wrong.
+3. Create an L40 pod with a 60GB+ volume, wait, and confirm the card:
+
+       nvidia-smi --query-gpu=name,compute_cap --format=csv
+
+4. Transfer: `git archive HEAD | ssh <pod> "mkdir -p dispatch && tar -x -C dispatch"`
+5. Environment, on the pod -- all three of Phase 0's traps at once:
+
+       cd dispatch
+       export HF_HOME=/workspace/hf_cache        # NOT the 30GB container disk
+       command -v uv || pip install uv
+       uv sync --all-extras --dev
+       uv pip install transformers==4.57.6       # Phase 0 bug 1
+
+   From here on invoke `.venv/bin/python` directly. `uv run` re-syncs to
+   `uv.lock` on every call and silently undoes that override.
+
+   For Phase 0 bug 2, create a pod-local wrapper -- never committed:
+
+       cat > _patch_and_run.py <<'EOF'
+       import sys
+       from transformers.cache_utils import DynamicCache
+
+
+       def _get_usable_length(self, new_seq_length=None, layer_idx=0):
+           return self.get_seq_length(layer_idx)
+
+
+       DynamicCache.get_usable_length = _get_usable_length
+
+       from scripts.run_baseline import main
+
+       main(sys.argv[1:])
+       EOF
+
+6. Kernel correctness on the measurement hardware, before any timing:
+
+       .venv/bin/python -m pytest -m gpu tests/unit/test_grouped_gemm_kernel.py -v -rs
+
+   Expected: 25 passed, 0 skipped (an L40 is compute capability 8.9, so the
+   bf16 cases run). Anything red: stop. Nothing below is meaningful.
+7. The stock run -- this session's own "before" number and the reference
+   every kernel run is compared against:
+
+       DATE=$(date +%Y-%m-%d)
+       .venv/bin/python _patch_and_run.py --trust-remote-code \
+         --run-label $DATE-phase-1-stock
+
+8. The three backend runs. The CLI exits non-zero on disagreement, after
+   writing its evidence:
+
+       for kernel in torch naive persistent; do
+         .venv/bin/python _patch_and_run.py --trust-remote-code \
+           --moe-kernel $kernel \
+           --compare-reference docs/findings/$DATE-phase-1-stock-reference.safetensors \
+           --run-label $DATE-phase-1-$kernel || break
+       done
+
+   Every results JSON must show `"moe_layers_patched": 27`. Per Task 8's
+   review: an exact `"max_abs_diff": 0.0` is suspicious, not a perfect
+   score -- it would mean the kernel path never executed (e.g. the model
+   was left in training mode) rather than that it matched exactly. Read
+   `top1_agreement` and `max_abs_diff` by eye for each run; the CLI's own
+   exit code only checks `mutual_top_k`.
+9. The micro-benchmark, both routing shapes:
+
+       .venv/bin/python -m scripts.run_kernel_bench --distribution zipf \
+         --run-label $DATE-phase-1-kernel-bench-zipf
+       .venv/bin/python -m scripts.run_kernel_bench --distribution uniform \
+         --run-label $DATE-phase-1-kernel-bench-uniform
+
+10. Copy the JSON back (the .safetensors stay on the pod -- `.gitignore`
+    excludes them repo-wide by design):
+
+        scp '<pod>:dispatch/docs/findings/'"$DATE"'-phase-1-*.json' docs/findings/
+
+11. Cost, teardown, and an independent verification that the pod reports
+    gone -- same as session A step 8, with `run_label='phase-1-grouped-gemm'`.
+    Per session A's finding: expect a 404 on re-query, not a `TERMINATED`
+    status string.

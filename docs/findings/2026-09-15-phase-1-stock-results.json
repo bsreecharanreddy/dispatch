@@ -1,0 +1,14 @@
+{
+  "model": "deepseek-ai/deepseek-moe-16b-base",
+  "device": "cuda",
+  "dtype": "bfloat16",
+  "moe_kernel": "none",
+  "moe_layers_patched": 0,
+  "run_count": 15,
+  "mean_ttft": 0.2987131754596097,
+  "p50_ttft": 0.26902816200163215,
+  "p99_ttft": 0.8091764858103121,
+  "mean_inter_token_latency": 0.07632690719264146,
+  "mean_tokens_per_second": 12.551173532667166,
+  "reference_comparison": {}
+}

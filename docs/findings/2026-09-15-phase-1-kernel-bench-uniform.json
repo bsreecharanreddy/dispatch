@@ -1,0 +1,258 @@
+{
+  "config": {
+    "hidden_size": 2048,
+    "moe_intermediate_size": 1408,
+    "n_routed_experts": 64,
+    "num_experts_per_tok": 6,
+    "distribution": "uniform",
+    "dtype": "bfloat16",
+    "block_m": 16,
+    "seed": 0,
+    "do_bench_warmup_ms": 25,
+    "do_bench_rep_ms": 100,
+    "gpu": "NVIDIA L40",
+    "torch": "2.14.0+cu130",
+    "cuda": "13.0",
+    "triton": "3.8.0",
+    "block_n": 64,
+    "block_k": 64,
+    "group_size_m": 8
+  },
+  "results": [
+    {
+      "num_tokens": 1,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 1.2423029551740552,
+          "p50_latency_ms": 1.1347839832305908,
+          "p99_latency_ms": 1.3809728574752809,
+          "tflops": 0.08356176210291284
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 0.10426933334715534,
+          "p50_latency_ms": 0.10326399654150009,
+          "p99_latency_ms": 0.10536639764904976,
+          "tflops": 0.33186179377202313
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 0.510168266048034,
+          "p50_latency_ms": 0.5093759894371033,
+          "p99_latency_ms": 0.7376256108283995,
+          "tflops": 0.20347997103807716
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.07839704211018667,
+          "p50_latency_ms": 0.07838400080800056,
+          "p99_latency_ms": 0.08015231937170028,
+          "tflops": 0.4413815504845915
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 0.5261685346563657,
+          "p50_latency_ms": 0.5216479897499084,
+          "p99_latency_ms": 0.6542268818616865,
+          "tflops": 0.19729234487158454
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.07858904203822632,
+          "p50_latency_ms": 0.07864000275731087,
+          "p99_latency_ms": 0.0801599994301796,
+          "tflops": 0.4403032166134412
+        }
+      ]
+    },
+    {
+      "num_tokens": 16,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 7.02027808702909,
+          "p50_latency_ms": 6.825535774230957,
+          "p99_latency_ms": 7.04276725769043,
+          "tflops": 0.23659239184111788
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 1.908258843421936,
+          "p50_latency_ms": 1.8598880171775818,
+          "p99_latency_ms": 2.0036863744258877,
+          "tflops": 0.29013261482241304
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 1.7089964795112609,
+          "p50_latency_ms": 1.707808017730713,
+          "p99_latency_ms": 1.7586815738677977,
+          "tflops": 0.9718828586908482
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.5546871898537975,
+          "p50_latency_ms": 0.5553280115127563,
+          "p99_latency_ms": 0.5573760271072388,
+          "tflops": 0.9981267606809681
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 1.6291237578672522,
+          "p50_latency_ms": 1.628383994102478,
+          "p99_latency_ms": 1.7981756603717804,
+          "tflops": 1.0195323565684202
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.5174007168630275,
+          "p50_latency_ms": 0.517551988363266,
+          "p99_latency_ms": 0.5197222411632537,
+          "tflops": 1.0700567470349454
+        }
+      ]
+    },
+    {
+      "num_tokens": 128,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 9.145238399505615,
+          "p50_latency_ms": 9.107279777526855,
+          "p99_latency_ms": 9.394476594924926,
+          "tflops": 1.452947915793897
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 2.6961619420485063,
+          "p50_latency_ms": 2.6155200004577637,
+          "p99_latency_ms": 2.8447523188591,
+          "tflops": 1.642774106007433
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 2.1873208045959474,
+          "p50_latency_ms": 2.184767961502075,
+          "p99_latency_ms": 2.205464346408844,
+          "tflops": 6.07480852560836
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.6959648297564818,
+          "p50_latency_ms": 0.6953279972076416,
+          "p99_latency_ms": 0.6980479955673218,
+          "tflops": 6.364093176302848
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 2.078748941421509,
+          "p50_latency_ms": 2.0776638984680176,
+          "p99_latency_ms": 2.23655686378479,
+          "tflops": 6.392092285523226
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.646935029007564,
+          "p50_latency_ms": 0.6436480283737183,
+          "p99_latency_ms": 0.647133423089981,
+          "tflops": 6.84641397575059
+        }
+      ]
+    },
+    {
+      "num_tokens": 512,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 9.927271101209852,
+          "p50_latency_ms": 10.083488464355469,
+          "p99_latency_ms": 10.387140998840332,
+          "tflops": 5.353960796086499
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 2.8975510001182556,
+          "p50_latency_ms": 2.7253758907318115,
+          "p99_latency_ms": 2.9374693870544433,
+          "tflops": 6.114384214558067
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 2.287842530953257,
+          "p50_latency_ms": 2.2749760150909424,
+          "p99_latency_ms": 2.2920840787887573,
+          "tflops": 23.231590272890998
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.7054924809932709,
+          "p50_latency_ms": 0.7033920288085938,
+          "p99_latency_ms": 0.7817164516448971,
+          "tflops": 25.112585283767164
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 2.3405915788702063,
+          "p50_latency_ms": 2.33459210395813,
+          "p99_latency_ms": 2.4536703205108643,
+          "tflops": 22.70802850348431
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.6770544480351568,
+          "p50_latency_ms": 0.6769919991493225,
+          "p99_latency_ms": 0.6800831711292267,
+          "tflops": 26.16737863168139
+        }
+      ]
+    },
+    {
+      "num_tokens": 2048,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 10.343772464328342,
+          "p50_latency_ms": 10.206687927246094,
+          "p99_latency_ms": 11.2956489944458,
+          "tflops": 20.55351486947126
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 2.9420160055160522,
+          "p50_latency_ms": 2.905855894088745,
+          "p99_latency_ms": 3.1747007608413695,
+          "tflops": 24.08789083782343
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 4.982177484603155,
+          "p50_latency_ms": 5.25494384765625,
+          "p99_latency_ms": 5.375069780349731,
+          "tflops": 42.672281709958845
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 1.600070175371672,
+          "p50_latency_ms": 1.6138880252838135,
+          "p99_latency_ms": 1.6856805860996247,
+          "tflops": 44.28990770204106
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 5.31420799891154,
+          "p50_latency_ms": 5.559583902359009,
+          "p99_latency_ms": 5.7208744192123415,
+          "tflops": 40.0061271962906
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 1.7076182855027062,
+          "p50_latency_ms": 1.6209919452667236,
+          "p99_latency_ms": 1.667360007762909,
+          "tflops": 41.500469388062015
+        }
+      ]
+    }
+  ]
+}

@@ -101,7 +101,10 @@ Plan: `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`. Branch
 - [x] Task 6: Kernel correctness session on a rented GPU (runbook session A)
 - [x] Task 7: Backend registry + kernel micro-benchmark CLI (`backends.py`, `bench.py`, `scripts/run_kernel_bench.py`)
 - [x] Task 8: Real-model integration (`--moe-kernel`, `--compare-reference`)
-- [ ] Task 9: Measured run on an L40 (runbook session B)
+- [x] Task 9: Measured run on an L40 (runbook session B)
+
+**Phase 1 is complete.** All 9 tasks done, `make check` green throughout
+(73 tests, lint and `mypy --strict` clean).
 
 Task 6's rented-GPU session (2026-09-15, RTX 3090 substituted for the
 originally-quoted RTX A4000, which sold out at deploy time): both the
@@ -152,8 +155,39 @@ code, not a paraphrase. 17 new/changed tests across
 of them `slow`, downloading `hf-internal-testing/tiny-random-gpt2` from
 Hugging Face Hub); full non-GPU suite is 72 passed + 1 skipped (the skip
 is the pre-existing Triton-is-Linux-only guard in
-`test_grouped_gemm_kernel.py`, unrelated to this task).
+`test_grouped_gemm_kernel.py`, unrelated to this task). Task 8's review
+found four Important hardening gaps in this exact code path (fixed
+across two rounds before Task 9 ran on it): evidence written before a
+bad `--compare-reference` could raise and lose it; `patch_moe_infer`
+forcing eval mode so a training-mode model can't report a nonzero
+patched count while never executing the patched path; a corrected
+bidirectional test for `mutual_top_k`; and stale "Phase 0" defaults on
+what is now a multi-phase CLI.
+
+**Task 9's measured run** (2026-09-15, NVIDIA L40, RunPod Secure Cloud,
+$0.82/hr, $0.59 total for 43.3 minutes -- same GPU class as Phase 0, so
+the comparison holds): both kernels re-verified correct on this card
+(25/25, 0 skipped), then swapped into `deepseek-ai/deepseek-moe-16b-base`'s
+real 27 MoE layers. Stock throughput **12.55 tokens/sec** (consistent
+with Phase 0's separately-measured 12.75 tokens/sec on the same config --
+a cross-session sanity check). Kernel-backed: **naive 20.98 tokens/sec
+(+67.2%)**, **persistent 20.80 tokens/sec (+65.7%)**, both at perfect
+mutual top-5 and top-1 logit agreement across every tested position (3
+prompts x 5 repetitions x 64 new tokens, bf16). Cost per 1M generated
+tokens: $18.15 (stock) -> $10.86 (naive). A token-count micro-benchmark
+(1-2048 tokens, zipf and uniform routing) found the persistent kernel's
+grouped launch ordering shows **no measurable benefit** over the naive
+kernel anywhere in the swept range -- a null result the plan's own risk
+section predicted before the run happened (unbatched decode gives each
+expert too few rows for L2 tile reuse to matter across a persistent
+CTA's grouped ordering), recorded rather than buried. Full account:
+`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
+
+**Total Phase 1 GPU cost: $0.65** across both paid sessions ($0.0606
+kernel correctness + $0.5916 the measured run) -- both well under their
+stated caps ($3 and $5 respectively).
 
 ## Next step
 
-Task 9 of `docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
+Phase 1 is complete and ready to push as a single PR (per this repo's
+one-branch-per-phase convention). Phase 2 is not yet planned.

@@ -58,8 +58,26 @@ after finding and fixing three real environment bugs along the way (a
 in the same file one release earlier, and a model-cache-on-the-wrong-disk
 trap). Full account: `docs/findings/2026-09-14-phase-0-baseline-run.md`.
 
-**Phase 1 (custom Triton grouped-GEMM kernel) is planned, not started**:
-`docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`.
+**Phase 1 (custom Triton grouped-GEMM kernel) is complete, 2026-09-15**
+(`make check` green throughout, 73 tests, lint and `mypy --strict`
+clean):
+`docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`. A naive and a
+persistent, cache-aware Triton grouped-GEMM kernel both passed 25/25
+correctness tests on two real GPUs (RTX 3090, then the L40 the measured
+run used) with zero kernel bugs found. Swapped into
+`deepseek-ai/deepseek-moe-16b-base`'s real 27 MoE layers, both kernels
+measured **~65-67% faster decode throughput than DeepSeek's own stock
+`moe_infer`** (12.55 -> 20.98 tokens/sec, naive kernel) at perfect mutual
+top-5 and top-1 logit agreement across every tested position -- zero
+measured correctness cost for that speedup. One honest null result: the
+persistent kernel's grouped launch ordering (built for L2 cache reuse)
+showed no measurable benefit over the naive kernel anywhere in this
+session, end-to-end or in a token-count sweep from 1 to 2048 -- unbatched
+decode gives each expert too few rows for it to matter, exactly as the
+plan's own risk section predicted before the run happened. Total GPU
+cost across both paid sessions: **$0.65** ($0.06 kernel correctness +
+$0.59 the measured run). Full account:
+`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
 
 ## One governing principle
 
@@ -98,10 +116,15 @@ These hold regardless of what the design doc ends up choosing:
 ## Testing policy
 
 No implementation code is committed without tests, and `make check` (the
-full gate: lint, typecheck, test) runs before every push. Specifics for
-this project's testing table — what a kernel-correctness test looks like,
-how benchmark reproducibility gets asserted — get written once the design
-doc exists and there's a real kernel/architecture to write them against.
+full gate: lint, typecheck, test) runs before every push. This project's
+testing table, settled by Phase 1's actual kernel work:
+
+| Layer | What must be covered |
+|---|---|
+| Kernel contract (CPU) | eager backend == `ReferenceMoE`; every row covered by exactly one tile; no tile crosses an expert boundary; experts that receive zero tokens |
+| Kernels (`gpu`) | each kernel meets `assert_matches_reference` against an fp32 reference at toy, decode- and prefill-shaped dims, fp16 and bf16; a mutation must turn the suite red |
+| End to end (`gpu`, paid) | mutual top-5 logit agreement with a same-session stock run; a kernel run that patches no layers refuses to run |
+| Benchmarks | `triton.testing.do_bench`; a backend that disagrees with the eager one is refused, not timed; every JSON carries its full config |
 
 ## Cost discipline
 
