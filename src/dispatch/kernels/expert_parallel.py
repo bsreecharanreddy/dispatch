@@ -10,9 +10,24 @@ import, before the real library is ever involved.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 
-from dispatch.kernels.moe_forward import GroupedMatmul, StackedExpertWeights, grouped_moe_routed
+from dispatch.kernels.integration import MoEInfer
+from dispatch.kernels.moe_forward import (
+    GroupedMatmul,
+    StackedExpertWeights,
+    grouped_moe_routed,
+    stack_expert_weights,
+)
+
+if TYPE_CHECKING:
+    # deep_ep needs 2 real GPUs to even build -- not installed on this dev
+    # box or in CI (same boundary as triton). `from __future__ import
+    # annotations` above means this is never evaluated at runtime, only by
+    # mypy (which has its own ignore_missing_imports override for deep_ep).
+    from deep_ep import Buffer
 
 
 def assign_experts_to_ranks(n_experts: int, n_ranks: int) -> torch.Tensor:
@@ -85,3 +100,116 @@ def simulate_ep_moe_routed(  # routing inputs plus a pluggable GEMM and tile siz
             x, topk_idx, topk_weight, local_weights, matmul, local_expert_ids, block_m=block_m
         )
     return combined
+
+
+def make_ep_moe_infer(
+    local_weights: StackedExpertWeights,
+    matmul: GroupedMatmul,
+    buffer: Buffer,
+    num_experts: int,
+    *,
+    block_m: int = 16,
+) -> MoEInfer:
+    """DeepEP's real dispatch()/combine() round trip wired into the
+    grouped-GEMM path. Uses DeepEP's V1 (legacy) `Buffer`, not V2's
+    `ElasticBuffer`: V2's NCCL Gin backend requires NVSwitch-level
+    multicast (GPU Fabric Manager), unavailable on this project's rented
+    pod (confirmed live 2026-09-16 -- see deepep_smoke_test.py's
+    docstring). V1's recv_topk_idx comes back already remapped to this
+    rank's LOCAL 0..num_local_experts-1 indexing (confirmed against
+    DeepEP's own tests/legacy/test_intranode.py), so local_expert_ids
+    here is the identity range -- local_expert_contribution's own remap
+    becomes a no-op that still correctly zeros the weight for DeepEP's
+    -1 padding sentinel (rows this rank received but doesn't own)."""
+    num_experts_per_rank = local_weights.num_experts
+    identity_local_ids = torch.arange(num_experts_per_rank)
+
+    @torch.no_grad()
+    def moe_infer(
+        x: torch.Tensor, flat_expert_indices: torch.Tensor, flat_expert_weights: torch.Tensor
+    ) -> torch.Tensor:
+        top_k = flat_expert_indices.numel() // x.shape[0]
+        topk_idx = flat_expert_indices.view(-1, top_k)
+        # V1's dispatch requires topk_weights as float32 (its own C++
+        # assertion, confirmed live 2026-09-16) -- cast back to x's dtype
+        # after receiving so grouped_moe_routed's output dtype matches
+        # the rest of the model.
+        topk_weight = flat_expert_weights.view(-1, top_k).to(torch.float32)
+
+        (
+            num_tokens_per_rank,
+            num_tokens_per_rdma_rank,
+            num_tokens_per_expert,
+            is_token_in_rank,
+            _,
+        ) = buffer.get_dispatch_layout(topk_idx, num_experts)
+        recv_x, recv_topk_idx, recv_topk_weight, _, handle, _ = buffer.dispatch(
+            x,
+            topk_idx=topk_idx,
+            topk_weights=topk_weight,
+            num_tokens_per_rank=num_tokens_per_rank,
+            num_tokens_per_rdma_rank=num_tokens_per_rdma_rank,
+            is_token_in_rank=is_token_in_rank,
+            num_tokens_per_expert=num_tokens_per_expert,
+        )
+
+        local_out = local_expert_contribution(
+            recv_x,
+            recv_topk_idx,
+            recv_topk_weight.to(x.dtype),
+            local_weights,
+            matmul,
+            identity_local_ids.to(recv_x.device),
+            block_m=block_m,
+        )
+
+        # No topk_weights on combine: DeepEP's own documented forward-pass
+        # example (docs/legacy.md's combine_forward) omits it too -- the
+        # weighting already happened above, in local_expert_contribution's
+        # call into grouped_moe_routed. Passing topk_weights here would be
+        # for the backward pass (gradient w.r.t. the gate weights), not
+        # this forward-inference path.
+        combined_x: torch.Tensor
+        combined_x, _, _ = buffer.combine(local_out, handle)
+        return combined_x
+
+    return moe_infer
+
+
+def patch_moe_infer_ep(
+    model: torch.nn.Module,
+    matmul: GroupedMatmul,
+    buffer: Buffer,
+    rank: int,
+    n_ranks: int,
+    *,
+    block_m: int = 16,
+) -> int:
+    """Same swap-in contract as moe_forward.py's patch_moe_infer, but each
+    layer's moe_infer only computes this rank's expert shard, dispatching/
+    combining the rest via DeepEP's real Buffer."""
+    model.eval()
+    patched = 0
+    for module in model.modules():
+        if not hasattr(module, "moe_infer"):
+            continue
+        experts = module.experts
+        if not isinstance(experts, torch.nn.ModuleList):
+            raise TypeError(
+                f"expected {type(module).__name__}.experts to be nn.ModuleList, "
+                f"got {type(experts).__name__}"
+            )
+        n_experts = len(experts)
+        rank_of_expert = assign_experts_to_ranks(n_experts, n_ranks)
+        local_expert_ids = (rank_of_expert == rank).nonzero(as_tuple=True)[0]
+        all_weights = stack_expert_weights(experts)
+        local_weights = StackedExpertWeights(
+            gate=all_weights.gate[local_expert_ids],
+            up=all_weights.up[local_expert_ids],
+            down=all_weights.down[local_expert_ids],
+        )
+        module.moe_infer = make_ep_moe_infer(  # type: ignore[assignment]
+            local_weights, matmul, buffer, n_experts, block_m=block_m
+        )
+        patched += 1
+    return patched
