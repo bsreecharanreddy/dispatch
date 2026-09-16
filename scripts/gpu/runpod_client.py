@@ -62,6 +62,7 @@ def create_pod(  # noqa: PLR0913 -- a pod-create request has this many independe
     image: str,
     *,
     disk_gb: int = 60,
+    gpu_count: int = 1,
     cloud: str = "COMMUNITY",
     ports: tuple[str, ...] = ("22/tcp",),
     start_ssh: bool = True,
@@ -70,7 +71,7 @@ def create_pod(  # noqa: PLR0913 -- a pod-create request has this many independe
     body = {
         "name": name,
         "image": image,
-        "gpu": {"id": gpu_type_id, "count": 1},
+        "gpu": {"id": gpu_type_id, "count": gpu_count},
         "disk": disk_gb,
         "ports": list(ports),
         "cloud": cloud,

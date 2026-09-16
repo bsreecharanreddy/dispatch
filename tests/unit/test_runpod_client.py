@@ -103,3 +103,18 @@ def test_create_pod_without_api_key_raises(monkeypatch: pytest.MonkeyPatch) -> N
 
     with pytest.raises(RunPodAPIError, match="RUNPOD_API_KEY"):
         create_pod("x", "y", "z")
+
+
+def test_create_pod_requests_multiple_gpus_when_asked() -> None:
+    payload = {"id": "pod_1", "status": "PROVISIONING", "cost": 5.18}
+    session = FakeSession(FakeResponse(200, payload))
+
+    create_pod(
+        "phase-3-ep",
+        "NVIDIA H100 NVL",
+        "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404",
+        gpu_count=2,
+        session=session,  # type: ignore[arg-type]
+    )
+
+    assert session.calls[0]["json"]["gpu"] == {"id": "NVIDIA H100 NVL", "count": 2}
