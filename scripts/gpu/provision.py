@@ -66,7 +66,14 @@ def write_cost_record(  # noqa: PLR0913 -- a cost record has this many independe
 
 
 def _cmd_create(args: argparse.Namespace) -> None:
-    pod = create_pod(args.name, args.gpu_type, args.image, cloud=args.cloud, disk_gb=args.disk_gb)
+    pod = create_pod(
+        args.name,
+        args.gpu_type,
+        args.image,
+        cloud=args.cloud,
+        disk_gb=args.disk_gb,
+        gpu_count=args.gpu_count,
+    )
     print(f"created pod {pod.id} status={pod.status} rate=${pod.cost_per_hour:.4f}/hr")
 
 
@@ -92,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--image", required=True)
     create.add_argument("--cloud", default="COMMUNITY", choices=["COMMUNITY", "SECURE"])
     create.add_argument("--disk-gb", type=int, default=60, dest="disk_gb")
+    create.add_argument("--gpu-count", type=int, default=1, dest="gpu_count")
     create.set_defaults(func=_cmd_create)
 
     wait = sub.add_parser("wait", help="wait for a pod to reach RUNNING")

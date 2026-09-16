@@ -123,7 +123,13 @@ def test_main_create_invokes_create_pod_and_prints_result(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     def fake_create_pod(
-        name: str, gpu_type_id: str, image: str, *, cloud: str = "COMMUNITY", disk_gb: int = 60
+        name: str,
+        gpu_type_id: str,
+        image: str,
+        *,
+        cloud: str = "COMMUNITY",
+        disk_gb: int = 60,
+        gpu_count: int = 1,
     ) -> PodHandle:
         return PodHandle(id="pod_999", status="PROVISIONING", cost_per_hour=0.4)
 
@@ -132,6 +138,50 @@ def test_main_create_invokes_create_pod_and_prints_result(
     main(["create", "--name", "x", "--gpu-type", "NVIDIA A40", "--image", "img"])
 
     assert "pod_999" in capsys.readouterr().out
+
+
+def test_build_parser_create_defaults_to_a_single_gpu() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        ["create", "--name", "x", "--gpu-type", "NVIDIA A40", "--image", "img"]
+    )
+
+    assert args.gpu_count == 1
+
+
+def test_main_create_passes_gpu_count_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_create_pod(
+        name: str,
+        gpu_type_id: str,
+        image: str,
+        *,
+        cloud: str = "COMMUNITY",
+        disk_gb: int = 60,
+        gpu_count: int = 1,
+    ) -> PodHandle:
+        captured["gpu_count"] = gpu_count
+        return PodHandle(id="pod_999", status="PROVISIONING", cost_per_hour=5.18)
+
+    monkeypatch.setattr("scripts.gpu.provision.create_pod", fake_create_pod)
+
+    main(
+        [
+            "create",
+            "--name",
+            "x",
+            "--gpu-type",
+            "NVIDIA H100 NVL",
+            "--image",
+            "img",
+            "--gpu-count",
+            "2",
+        ]
+    )
+
+    assert captured["gpu_count"] == 2
 
 
 def test_main_terminate_invokes_terminate_pod(

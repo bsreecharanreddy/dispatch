@@ -113,13 +113,15 @@ docs/STATUS.md                                          # Task 5
 `create_pod` currently hardcodes `"gpu": {"id": gpu_type_id, "count": 1}`
 -- Phase 3 is the first phase that needs more than one GPU per pod.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `tests/unit/test_runpod_client.py`, add:
 
 ```python
 def test_create_pod_requests_multiple_gpus_when_asked() -> None:
-    session = FakeSession(FakeResponse(200, {"id": "pod_1", "status": "PROVISIONING", "cost": 5.18}))
+    session = FakeSession(
+        FakeResponse(200, {"id": "pod_1", "status": "PROVISIONING", "cost": 5.18})
+    )
 
     create_pod(
         "phase-3-ep",
@@ -132,12 +134,12 @@ def test_create_pod_requests_multiple_gpus_when_asked() -> None:
     assert session.calls[0]["json"]["gpu"] == {"id": "NVIDIA H100 NVL", "count": 2}
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `uv run pytest tests/unit/test_runpod_client.py::test_create_pod_requests_multiple_gpus_when_asked -v`
 Expected: FAIL with `TypeError: create_pod() got an unexpected keyword argument 'gpu_count'`.
 
-- [ ] **Step 3: Add the parameter**
+- [x] **Step 3: Add the parameter**
 
 In `scripts/gpu/runpod_client.py`:
 
@@ -169,22 +171,26 @@ def create_pod(  # noqa: PLR0913 -- a pod-create request has this many independe
 
 (Only `gpu_count: int = 1,` and `"count": gpu_count` are new.)
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 Run: `uv run pytest tests/unit/test_runpod_client.py -v`
 Expected: all pass, including the existing
 `test_create_pod_sends_expected_body_and_parses_response` (still gets
 `count: 1` by default).
 
-- [ ] **Step 5: Thread it through `provision.py`'s CLI**
+- [x] **Step 5: Thread it through `provision.py`'s CLI**
 
 In `scripts/gpu/provision.py`, update `_cmd_create`:
 
 ```python
 def _cmd_create(args: argparse.Namespace) -> None:
     pod = create_pod(
-        args.name, args.gpu_type, args.image,
-        cloud=args.cloud, disk_gb=args.disk_gb, gpu_count=args.gpu_count,
+        args.name,
+        args.gpu_type,
+        args.image,
+        cloud=args.cloud,
+        disk_gb=args.disk_gb,
+        gpu_count=args.gpu_count,
     )
     print(f"created pod {pod.id} status={pod.status} rate=${pod.cost_per_hour:.4f}/hr")
 ```
@@ -195,7 +201,7 @@ and `build_parser`, after the existing `create.add_argument("--disk-gb", ...)`:
     create.add_argument("--gpu-count", type=int, default=1, dest="gpu_count")
 ```
 
-- [ ] **Step 6: Update the existing fake in `test_provision.py` to accept the new kwarg**
+- [x] **Step 6: Update the existing fake in `test_provision.py` to accept the new kwarg**
 
 `test_main_create_invokes_create_pod_and_prints_result`'s `fake_create_pod`
 must accept `gpu_count` now that `_cmd_create` always passes it:
@@ -222,13 +228,15 @@ def test_main_create_invokes_create_pod_and_prints_result(
     assert "pod_999" in capsys.readouterr().out
 ```
 
-- [ ] **Step 7: Add the new provision.py tests**
+- [x] **Step 7: Add the new provision.py tests**
 
 ```python
 def test_build_parser_create_defaults_to_a_single_gpu() -> None:
     parser = build_parser()
 
-    args = parser.parse_args(["create", "--name", "x", "--gpu-type", "NVIDIA A40", "--image", "img"])
+    args = parser.parse_args(
+        ["create", "--name", "x", "--gpu-type", "NVIDIA A40", "--image", "img"]
+    )
 
     assert args.gpu_count == 1
 
@@ -267,12 +275,12 @@ def test_main_create_passes_gpu_count_through(monkeypatch: pytest.MonkeyPatch) -
     assert captured["gpu_count"] == 2
 ```
 
-- [ ] **Step 8: Run the full suite and typecheck**
+- [x] **Step 8: Run the full suite and typecheck**
 
 Run: `uv run pytest tests/unit/test_runpod_client.py tests/unit/test_provision.py -v && uv run mypy src scripts tests`
 Expected: all pass, mypy clean.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add scripts/gpu/runpod_client.py scripts/gpu/provision.py tests/unit/test_runpod_client.py tests/unit/test_provision.py
@@ -300,7 +308,7 @@ git commit -m "feat: support multi-GPU pod rentals in RunPod provisioning"
   same file with `make_ep_moe_infer`, built on
   `local_expert_contribution` directly.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_expert_parallel.py`:
 
@@ -358,7 +366,9 @@ def test_simulate_ep_moe_routed_matches_the_non_ep_reference(n_ranks: int) -> No
     hidden_states = torch.randn(11, TOY_CONFIG.hidden_size)
     topk_idx, topk_weight = moe.route(hidden_states)
     weights = stack_expert_weights(moe.experts)
-    expected = grouped_moe_routed(hidden_states, topk_idx, topk_weight, weights, torch_grouped_matmul)
+    expected = grouped_moe_routed(
+        hidden_states, topk_idx, topk_weight, weights, torch_grouped_matmul
+    )
 
     rank_of_expert = assign_experts_to_ranks(TOY_CONFIG.n_routed_experts, n_ranks)
     actual = simulate_ep_moe_routed(
@@ -368,12 +378,12 @@ def test_simulate_ep_moe_routed_matches_the_non_ep_reference(n_ranks: int) -> No
     torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/unit/test_expert_parallel.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'dispatch.kernels.expert_parallel'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/dispatch/kernels/expert_parallel.py`:
 
@@ -463,17 +473,17 @@ def simulate_ep_moe_routed(  # noqa: PLR0913 -- routing inputs plus a pluggable 
     return combined
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `uv run pytest tests/unit/test_expert_parallel.py -v`
 Expected: all pass.
 
-- [ ] **Step 5: Lint and typecheck**
+- [x] **Step 5: Lint and typecheck**
 
 Run: `uv run ruff check src/dispatch/kernels/expert_parallel.py tests/unit/test_expert_parallel.py && uv run ruff format --check src/dispatch/kernels/expert_parallel.py tests/unit/test_expert_parallel.py && uv run mypy src tests`
 Expected: clean. (Add `"src/dispatch/kernels/expert_parallel.py" = ["PLR0913"]` to `pyproject.toml`'s `[tool.ruff.lint.per-file-ignores]` only if the inline `# noqa: PLR0913` comments above don't satisfy ruff -- try the inline comments first, they match this file's own existing convention in `moe_forward.py`.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/dispatch/kernels/expert_parallel.py tests/unit/test_expert_parallel.py
@@ -500,7 +510,7 @@ installed, none of which CI or a single-GPU dev box has. Runs once, live,
 on the rented pod in Task 4, before the full model integration is written
 against unconfirmed assumptions.
 
-- [ ] **Step 1: Write the smoke test**
+- [x] **Step 1: Write the smoke test**
 
 Create `scripts/gpu/deepep_smoke_test.py`:
 
@@ -598,13 +608,13 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2: Syntax-check without GPU/deep_ep (this repo's dev box has neither)**
+- [x] **Step 2: Syntax-check without GPU/deep_ep (this repo's dev box has neither)**
 
 Run: `python3 -c "import ast; ast.parse(open('scripts/gpu/deepep_smoke_test.py').read()); print('parses cleanly')"`
 Expected: `parses cleanly`. This is a syntax-level check only -- its actual
 behavior is proven live in Task 4, on the rented pod.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scripts/gpu/deepep_smoke_test.py
@@ -629,7 +639,7 @@ git commit -m "feat: DeepEP dispatch/combine smoke test for Phase 3's real integ
 a live session with the user, not something to run unattended -- get
 explicit go-ahead before renting.
 
-- [ ] **Step 1: Write the runbook**
+- [x] **Step 1: Write the runbook**
 
 Create `docs/runbooks/phase-3-multi-gpu-ep.md`:
 
@@ -867,12 +877,12 @@ both fit the cap for a multi-hour session.
     ```
 ````
 
-- [ ] **Step 2: Get the user's explicit go-ahead, then execute the runbook**
+- [x] **Step 2: Get the user's explicit go-ahead, then execute the runbook**
 
 Confirm the budget cap and GPU choice with the user before the first
 `create` call -- this is a paid action, never taken unattended.
 
-- [ ] **Step 3: Commit the runbook, the pod-live `expert_parallel.py`
+- [x] **Step 3: Commit the runbook, the pod-live `expert_parallel.py`
   addition, and the cost record**
 
 ```bash
@@ -894,7 +904,7 @@ was assumed.
 - Create: `docs/findings/2026-09-15-phase-3-multi-gpu-ep-run.md`
 - Modify: `docs/STATUS.md`
 
-- [ ] **Step 1: Write the findings doc**
+- [x] **Step 1: Write the findings doc**
 
 Cover, in `docs/findings/2026-09-15-phase-3-multi-gpu-ep-run.md`: whether
 real NVLink was confirmed and on what hardware; whether DeepEP installed
@@ -910,7 +920,7 @@ before the full grid, say so plainly and report exactly what was
 measured -- matching this project's practice of writing down a null or
 partial result rather than a flattering guess.
 
-- [ ] **Step 2: Update STATUS.md**
+- [x] **Step 2: Update STATUS.md**
 
 Add a "## Phase 3 progress" section following the Phase 0/1/2 pattern:
 plan link, hardware actually used, the correctness-gate result, the
@@ -918,7 +928,7 @@ crossover-thesis answer, and total GPU cost. Set "## Next step" to
 reflect what's actually next (Phase 4 planning, or follow-up on Phase 3 if
 something didn't land cleanly).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/findings/2026-09-15-phase-3-multi-gpu-ep-run.md docs/STATUS.md
