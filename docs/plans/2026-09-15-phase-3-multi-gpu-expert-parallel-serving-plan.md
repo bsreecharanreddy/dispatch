@@ -904,7 +904,7 @@ was assumed.
 - Create: `docs/findings/2026-09-15-phase-3-multi-gpu-ep-run.md`
 - Modify: `docs/STATUS.md`
 
-- [ ] **Step 1: Write the findings doc**
+- [x] **Step 1: Write the findings doc**
 
 Cover, in `docs/findings/2026-09-15-phase-3-multi-gpu-ep-run.md`: whether
 real NVLink was confirmed and on what hardware; whether DeepEP installed
@@ -920,7 +920,7 @@ before the full grid, say so plainly and report exactly what was
 measured -- matching this project's practice of writing down a null or
 partial result rather than a flattering guess.
 
-- [ ] **Step 2: Update STATUS.md**
+- [x] **Step 2: Update STATUS.md**
 
 Add a "## Phase 3 progress" section following the Phase 0/1/2 pattern:
 plan link, hardware actually used, the correctness-gate result, the
@@ -928,7 +928,7 @@ crossover-thesis answer, and total GPU cost. Set "## Next step" to
 reflect what's actually next (Phase 4 planning, or follow-up on Phase 3 if
 something didn't land cleanly).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/findings/2026-09-15-phase-3-multi-gpu-ep-run.md docs/STATUS.md
