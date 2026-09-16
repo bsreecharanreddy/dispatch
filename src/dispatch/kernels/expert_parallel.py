@@ -44,8 +44,12 @@ def local_expert_contribution(  # routing inputs plus a pluggable GEMM and tile 
     the weight (not dropping the row) for non-local slots, so shapes stay
     valid without changing grouped_moe_routed itself."""
     is_local = torch.isin(topk_idx, local_expert_ids)
-    local_index_of = torch.zeros(int(topk_idx.max().item()) + 1, dtype=torch.int64)
-    local_index_of[local_expert_ids] = torch.arange(local_expert_ids.numel())
+    local_index_of = torch.zeros(
+        int(topk_idx.max().item()) + 1, dtype=torch.int64, device=topk_idx.device
+    )
+    local_index_of[local_expert_ids] = torch.arange(
+        local_expert_ids.numel(), device=topk_idx.device
+    )
     local_topk_idx = local_index_of[topk_idx.clamp(min=0)]
     local_topk_weight = torch.where(is_local, topk_weight, torch.zeros_like(topk_weight))
     return grouped_moe_routed(
