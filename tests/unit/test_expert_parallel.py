@@ -10,8 +10,13 @@ from __future__ import annotations
 import pytest
 import torch
 
-from dispatch.kernels.expert_parallel import assign_experts_to_ranks, simulate_ep_moe_routed
+from dispatch.kernels.expert_parallel import (
+    assign_experts_to_ranks,
+    local_expert_contribution,
+    simulate_ep_moe_routed,
+)
 from dispatch.kernels.moe_forward import (
+    StackedExpertWeights,
     grouped_moe_routed,
     stack_expert_weights,
     torch_grouped_matmul,
@@ -61,3 +66,40 @@ def test_simulate_ep_moe_routed_matches_the_non_ep_reference(n_ranks: int) -> No
     )
 
     torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.gpu
+def test_local_expert_contribution_matches_cpu_when_inputs_are_on_cuda() -> None:
+    """Regression test for a real bug (found 2026-09-16 while wiring Task 4's
+    real EP layer): local_expert_contribution's remap tensors defaulted to
+    CPU regardless of topk_idx's device, so the first real CUDA call would
+    have raised a device-mismatch error. CPU-only tests can't catch this --
+    CPU tensors trivially satisfy the same-device check -- so this needs an
+    actual CUDA device."""
+    torch.manual_seed(0)
+    moe = ReferenceMoE(TOY_CONFIG)
+    hidden_states = torch.randn(11, TOY_CONFIG.hidden_size)
+    topk_idx, topk_weight = moe.route(hidden_states)
+    weights = stack_expert_weights(moe.experts)
+    local_expert_ids = torch.arange(4)
+    local_weights = StackedExpertWeights(
+        gate=weights.gate[:4], up=weights.up[:4], down=weights.down[:4]
+    )
+
+    expected = local_expert_contribution(
+        hidden_states, topk_idx, topk_weight, local_weights, torch_grouped_matmul, local_expert_ids
+    )
+    actual = local_expert_contribution(
+        hidden_states.cuda(),
+        topk_idx.cuda(),
+        topk_weight.cuda(),
+        StackedExpertWeights(
+            gate=local_weights.gate.cuda(),
+            up=local_weights.up.cuda(),
+            down=local_weights.down.cuda(),
+        ),
+        torch_grouped_matmul,
+        local_expert_ids.cuda(),
+    )
+
+    torch.testing.assert_close(actual.cpu(), expected, rtol=1e-5, atol=1e-6)
