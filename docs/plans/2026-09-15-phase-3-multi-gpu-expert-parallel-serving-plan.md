@@ -119,7 +119,9 @@ In `tests/unit/test_runpod_client.py`, add:
 
 ```python
 def test_create_pod_requests_multiple_gpus_when_asked() -> None:
-    session = FakeSession(FakeResponse(200, {"id": "pod_1", "status": "PROVISIONING", "cost": 5.18}))
+    session = FakeSession(
+        FakeResponse(200, {"id": "pod_1", "status": "PROVISIONING", "cost": 5.18})
+    )
 
     create_pod(
         "phase-3-ep",
@@ -183,8 +185,12 @@ In `scripts/gpu/provision.py`, update `_cmd_create`:
 ```python
 def _cmd_create(args: argparse.Namespace) -> None:
     pod = create_pod(
-        args.name, args.gpu_type, args.image,
-        cloud=args.cloud, disk_gb=args.disk_gb, gpu_count=args.gpu_count,
+        args.name,
+        args.gpu_type,
+        args.image,
+        cloud=args.cloud,
+        disk_gb=args.disk_gb,
+        gpu_count=args.gpu_count,
     )
     print(f"created pod {pod.id} status={pod.status} rate=${pod.cost_per_hour:.4f}/hr")
 ```
@@ -228,7 +234,9 @@ def test_main_create_invokes_create_pod_and_prints_result(
 def test_build_parser_create_defaults_to_a_single_gpu() -> None:
     parser = build_parser()
 
-    args = parser.parse_args(["create", "--name", "x", "--gpu-type", "NVIDIA A40", "--image", "img"])
+    args = parser.parse_args(
+        ["create", "--name", "x", "--gpu-type", "NVIDIA A40", "--image", "img"]
+    )
 
     assert args.gpu_count == 1
 
@@ -358,7 +366,9 @@ def test_simulate_ep_moe_routed_matches_the_non_ep_reference(n_ranks: int) -> No
     hidden_states = torch.randn(11, TOY_CONFIG.hidden_size)
     topk_idx, topk_weight = moe.route(hidden_states)
     weights = stack_expert_weights(moe.experts)
-    expected = grouped_moe_routed(hidden_states, topk_idx, topk_weight, weights, torch_grouped_matmul)
+    expected = grouped_moe_routed(
+        hidden_states, topk_idx, topk_weight, weights, torch_grouped_matmul
+    )
 
     rank_of_expert = assign_experts_to_ranks(TOY_CONFIG.n_routed_experts, n_ranks)
     actual = simulate_ep_moe_routed(
