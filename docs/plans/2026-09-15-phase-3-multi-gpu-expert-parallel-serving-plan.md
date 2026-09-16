@@ -308,7 +308,7 @@ git commit -m "feat: support multi-GPU pod rentals in RunPod provisioning"
   same file with `make_ep_moe_infer`, built on
   `local_expert_contribution` directly.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_expert_parallel.py`:
 
@@ -378,12 +378,12 @@ def test_simulate_ep_moe_routed_matches_the_non_ep_reference(n_ranks: int) -> No
     torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/unit/test_expert_parallel.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'dispatch.kernels.expert_parallel'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/dispatch/kernels/expert_parallel.py`:
 
@@ -473,17 +473,17 @@ def simulate_ep_moe_routed(  # noqa: PLR0913 -- routing inputs plus a pluggable 
     return combined
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `uv run pytest tests/unit/test_expert_parallel.py -v`
 Expected: all pass.
 
-- [ ] **Step 5: Lint and typecheck**
+- [x] **Step 5: Lint and typecheck**
 
 Run: `uv run ruff check src/dispatch/kernels/expert_parallel.py tests/unit/test_expert_parallel.py && uv run ruff format --check src/dispatch/kernels/expert_parallel.py tests/unit/test_expert_parallel.py && uv run mypy src tests`
 Expected: clean. (Add `"src/dispatch/kernels/expert_parallel.py" = ["PLR0913"]` to `pyproject.toml`'s `[tool.ruff.lint.per-file-ignores]` only if the inline `# noqa: PLR0913` comments above don't satisfy ruff -- try the inline comments first, they match this file's own existing convention in `moe_forward.py`.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/dispatch/kernels/expert_parallel.py tests/unit/test_expert_parallel.py
