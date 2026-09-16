@@ -639,7 +639,7 @@ git commit -m "feat: DeepEP dispatch/combine smoke test for Phase 3's real integ
 a live session with the user, not something to run unattended -- get
 explicit go-ahead before renting.
 
-- [ ] **Step 1: Write the runbook**
+- [x] **Step 1: Write the runbook**
 
 Create `docs/runbooks/phase-3-multi-gpu-ep.md`:
 
@@ -877,12 +877,12 @@ both fit the cap for a multi-hour session.
     ```
 ````
 
-- [ ] **Step 2: Get the user's explicit go-ahead, then execute the runbook**
+- [x] **Step 2: Get the user's explicit go-ahead, then execute the runbook**
 
 Confirm the budget cap and GPU choice with the user before the first
 `create` call -- this is a paid action, never taken unattended.
 
-- [ ] **Step 3: Commit the runbook, the pod-live `expert_parallel.py`
+- [x] **Step 3: Commit the runbook, the pod-live `expert_parallel.py`
   addition, and the cost record**
 
 ```bash
