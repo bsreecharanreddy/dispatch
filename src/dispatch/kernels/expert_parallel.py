@@ -59,9 +59,14 @@ def local_expert_contribution(  # routing inputs plus a pluggable GEMM and tile 
     the weight (not dropping the row) for non-local slots, so shapes stay
     valid without changing grouped_moe_routed itself."""
     is_local = torch.isin(topk_idx, local_expert_ids)
-    local_index_of = torch.zeros(
-        int(topk_idx.max().item()) + 1, dtype=torch.int64, device=topk_idx.device
-    )
+    # Sized to cover both topk_idx's observed max AND local_expert_ids' own
+    # max -- not topk_idx's alone. A real batch's tokens don't always route
+    # to every local expert (confirmed live 2026-09-16 against the real
+    # 64-expert model: local_expert_ids can reach higher than whatever this
+    # particular batch's topk_idx happens to touch), so sizing on topk_idx
+    # alone left local_index_of[local_expert_ids] indexing out of bounds.
+    index_span = max(int(topk_idx.max().item()), int(local_expert_ids.max().item())) + 1
+    local_index_of = torch.zeros(index_span, dtype=torch.int64, device=topk_idx.device)
     local_index_of[local_expert_ids] = torch.arange(
         local_expert_ids.numel(), device=topk_idx.device
     )
