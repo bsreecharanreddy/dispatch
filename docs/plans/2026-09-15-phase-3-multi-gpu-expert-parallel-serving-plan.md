@@ -510,7 +510,7 @@ installed, none of which CI or a single-GPU dev box has. Runs once, live,
 on the rented pod in Task 4, before the full model integration is written
 against unconfirmed assumptions.
 
-- [ ] **Step 1: Write the smoke test**
+- [x] **Step 1: Write the smoke test**
 
 Create `scripts/gpu/deepep_smoke_test.py`:
 
@@ -608,13 +608,13 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2: Syntax-check without GPU/deep_ep (this repo's dev box has neither)**
+- [x] **Step 2: Syntax-check without GPU/deep_ep (this repo's dev box has neither)**
 
 Run: `python3 -c "import ast; ast.parse(open('scripts/gpu/deepep_smoke_test.py').read()); print('parses cleanly')"`
 Expected: `parses cleanly`. This is a syntax-level check only -- its actual
 behavior is proven live in Task 4, on the rented pod.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scripts/gpu/deepep_smoke_test.py
