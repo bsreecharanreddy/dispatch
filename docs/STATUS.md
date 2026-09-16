@@ -227,8 +227,66 @@ workers, and RunPod's proxy-only SSH access for this pod) and every
 deviation from the plan and why:
 `docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
 
+## Phase 3 progress
+
+Plan: `docs/plans/2026-09-15-phase-3-multi-gpu-expert-parallel-serving-plan.md`.
+Design: `docs/design/2026-09-15-phase-3-multi-gpu-expert-parallel-serving.md`.
+ADR: `docs/adr/0002-deepep-over-hand-rolled-communication.md`. Branch
+`phase-3-multi-gpu-expert-parallel-serving`, pushed as PR #3.
+
+- [x] Task 1: Multi-GPU RunPod provisioning (`gpu_count` on `create_pod`/`provision.py`)
+- [x] Task 2: Expert-to-rank sharding, proven correct on CPU (`expert_parallel.py`)
+- [x] Task 3: DeepEP dispatch/combine smoke test (`scripts/gpu/deepep_smoke_test.py`) --
+      switched from the plan's assumed V2 `ElasticBuffer` to V1 `Buffer` live, see below
+- [x] Task 4: GPU rental runbook, real EP MoE layer, correctness gate, benchmark
+- [x] Task 5: Findings doc and this update
+
+**Phase 3 is complete.** All 5 tasks done, `make check` green throughout.
+
+**Real hardware corrected the plan on two fronts before any measurement
+happened.** RunPod's H100 stock (the design doc's quoted GPU) vanished
+on both clouds within a minute of a live catalog check showing it
+available -- rented 2x H200 SXM instead (still Hopper-class, still
+within the $25 cap). More significantly, DeepEP V2's `ElasticBuffer`
+(the plan's assumed API) never worked on this rental: its NCCL Gin
+backend needs NVSwitch-level multicast (GPU Fabric Manager), and this
+pod's `nvidia-smi -q` reports `GPU Fabric GUID: N/A` with no
+`fabricmanager` process -- a rented-container tenancy limitation, not a
+code bug. Switched to DeepEP's older V1 (legacy) `Buffer` API, which
+uses plain NVLink peer-to-peer memory and worked immediately once its
+own two real API differences were handled (float32-only dispatch
+weights; `recv_topk_idx` already remapped to local, not global, expert
+indices). Two more real bugs surfaced wiring the real EP layer against
+CUDA tensors and the real 64-expert model for the first time (a
+device-placement bug and an undersized remap table in
+`local_expert_contribution`), both fixed with regression tests, neither
+caught by the CPU-only tests that preceded real hardware.
+
+**Correctness gate passed**: perfect top-1 agreement and mutual top-5
+agreement between the real 2-GPU DeepEP-backed EP path and a single-GPU
+reference, across all 3 prompts, on the real
+`deepseek-ai/deepseek-moe-16b-base` (27 MoE layers patched both sides).
+
+**The measured answer to Phase 3's thesis** (does Phase 1's
+naive-vs-persistent crossover hold, shift, or disappear under DeepEP's
+real per-expert token-count distribution): it doesn't apply at this
+project's real workload scale. The crossover doesn't reproduce on H200
+at all -- naive wins at every token count Phase 1 tested (16-2048),
+independent of EP. And DeepEP's real dispatch, measured directly across
+the real model's 27 layers, produces per-local-expert token counts far
+below Phase 1's tested range (median 2, max ~20, vs. Phase 1's smallest
+tested point of 16) -- real single-request EP traffic lands close to
+Phase 1's single-token-decode tie, not its 16-128-token win region.
+Both kernels sit near a shared ~0.5ms latency floor at that real scale.
+Full account, including the exact bugs, fixes, and every number:
+`docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md`.
+
+**Total Phase 3 GPU cost: $13.03** of the $25 cap, 2x H200 SXM, 85
+minutes.
+
 ## Next step
 
-Phase 2's PR is open and awaiting maintainer review. No further work is
-planned on it beyond responding to review feedback. Phase 3 is not yet
-planned.
+Phase 3's PR (#3) is ready to merge -- `make check` green, correctness
+gate passed, findings recorded. Phase 2's PR is still open and awaiting
+maintainer review; no further work planned on it beyond responding to
+review feedback. Phase 4 is not yet planned.
