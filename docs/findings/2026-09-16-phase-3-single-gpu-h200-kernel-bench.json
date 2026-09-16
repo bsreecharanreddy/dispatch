@@ -1,0 +1,399 @@
+{
+  "config": {
+    "hidden_size": 2048,
+    "moe_intermediate_size": 1408,
+    "n_routed_experts": 64,
+    "num_experts_per_tok": 6,
+    "distribution": "zipf",
+    "dtype": "bfloat16",
+    "block_m": 16,
+    "seed": 0,
+    "do_bench_warmup_ms": 25,
+    "do_bench_rep_ms": 100,
+    "gpu": "NVIDIA H200",
+    "torch": "2.14.0+cu130",
+    "cuda": "13.0",
+    "triton": "3.8.0",
+    "block_n": 64,
+    "block_k": 64,
+    "group_size_m": 8
+  },
+  "results": [
+    {
+      "num_tokens": 16,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 7.0687071800231935,
+          "p50_latency_ms": 4.851999998092651,
+          "p99_latency_ms": 5.212860918045044,
+          "tflops": 0.23497145117200202
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 1.286626952259164,
+          "p50_latency_ms": 1.260640025138855,
+          "p99_latency_ms": 1.3075279891490936,
+          "tflops": 0.4303097545313035
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 0.5595541587270842,
+          "p50_latency_ms": 0.5807999968528748,
+          "p99_latency_ms": 0.8316249489784242,
+          "tflops": 2.968335340011485
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.0676671505415455,
+          "p50_latency_ms": 0.06790400296449661,
+          "p99_latency_ms": 0.06977600231766701,
+          "tflops": 8.181933531545377
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 1.0613760011536735,
+          "p50_latency_ms": 0.6949439942836761,
+          "p99_latency_ms": 0.8398672014474868,
+          "tflops": 1.5648972486608135
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.1173381200685518,
+          "p50_latency_ms": 0.11724799871444702,
+          "p99_latency_ms": 0.11900799721479416,
+          "tflops": 4.718399507990628
+        }
+      ]
+    },
+    {
+      "num_tokens": 32,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 5.120894381874486,
+          "p50_latency_ms": 5.101408004760742,
+          "p99_latency_ms": 5.208272790908813,
+          "tflops": 0.648693083723401
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 1.4964450451043936,
+          "p50_latency_ms": 1.561792016029358,
+          "p99_latency_ms": 4.772056407928466,
+          "tflops": 0.7399511660134193
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 0.7042401482205872,
+          "p50_latency_ms": 0.5400320291519165,
+          "p99_latency_ms": 0.875806725025177,
+          "tflops": 4.7169829445161
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.08257754832547978,
+          "p50_latency_ms": 0.08217599987983704,
+          "p99_latency_ms": 0.08413663990795611,
+          "tflops": 13.40916845382218
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 0.7237419056110694,
+          "p50_latency_ms": 0.7206239998340607,
+          "p99_latency_ms": 0.7745439857244492,
+          "tflops": 4.589880373439567
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.14661922273826014,
+          "p50_latency_ms": 0.14665600657463074,
+          "p99_latency_ms": 0.14899200201034546,
+          "tflops": 7.5521901925282275
+        }
+      ]
+    },
+    {
+      "num_tokens": 64,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 6.144599974155426,
+          "p50_latency_ms": 6.106655836105347,
+          "p99_latency_ms": 6.235892653465271,
+          "tflops": 1.0812384148592498
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 1.8490892327748811,
+          "p50_latency_ms": 1.8365440368652344,
+          "p99_latency_ms": 1.8667327928543092,
+          "tflops": 1.1976666527210356
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 0.6265284562787266,
+          "p50_latency_ms": 0.6223359704017639,
+          "p99_latency_ms": 0.647183369398117,
+          "tflops": 10.60411138459823
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.11341512329519203,
+          "p50_latency_ms": 0.11292800307273865,
+          "p99_latency_ms": 0.1153740793466568,
+          "tflops": 19.526430405898807
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 0.8609557339123317,
+          "p50_latency_ms": 0.8580000102519989,
+          "p99_latency_ms": 0.8770320028066636,
+          "tflops": 7.716746952609894
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.18868886690421643,
+          "p50_latency_ms": 0.18862400203943253,
+          "p99_latency_ms": 0.19052608534693719,
+          "tflops": 11.73674180323626
+        }
+      ]
+    },
+    {
+      "num_tokens": 128,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 6.595808029174805,
+          "p50_latency_ms": 6.525824069976807,
+          "p99_latency_ms": 6.611947107315063,
+          "tflops": 2.014545452691472
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 1.9801750158777043,
+          "p50_latency_ms": 1.9671039581298828,
+          "p99_latency_ms": 3.9184666252136084,
+          "tflops": 2.2367644215714853
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 0.6465230213271247,
+          "p50_latency_ms": 0.6446719765663147,
+          "p99_latency_ms": 0.6794297564029694,
+          "tflops": 20.55233090497612
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.11091922906744124,
+          "p50_latency_ms": 0.10963200032711029,
+          "p99_latency_ms": 0.11882752284407615,
+          "tflops": 39.93162467174165
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 1.0028923075277727,
+          "p50_latency_ms": 1.0008000135421753,
+          "p99_latency_ms": 1.0246207809448242,
+          "tflops": 13.24923421215097
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.2283601859627768,
+          "p50_latency_ms": 0.227743998169899,
+          "p99_latency_ms": 0.23001599311828613,
+          "tflops": 19.39560963889724
+        }
+      ]
+    },
+    {
+      "num_tokens": 256,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 6.616819254557291,
+          "p50_latency_ms": 6.613920211791992,
+          "p99_latency_ms": 6.683651275634766,
+          "tflops": 4.016296822026167
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 1.9862876716925173,
+          "p50_latency_ms": 1.9833279848098755,
+          "p99_latency_ms": 2.039664583206177,
+          "tflops": 4.459761883560288
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 0.7026305494346018,
+          "p50_latency_ms": 0.6980159878730774,
+          "p99_latency_ms": 0.7425459170341492,
+          "tflops": 37.82230955568992
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.11858557736365452,
+          "p50_latency_ms": 0.11878400295972824,
+          "p99_latency_ms": 0.12345919847488404,
+          "tflops": 74.70023121643978
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 1.1924988734416473,
+          "p50_latency_ms": 1.1905919909477234,
+          "p99_latency_ms": 1.2522707378864295,
+          "tflops": 22.285228720847424
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.28088886482087344,
+          "p50_latency_ms": 0.2807680070400238,
+          "p99_latency_ms": 0.2837500786781311,
+          "tflops": 31.536921385791135
+        }
+      ]
+    },
+    {
+      "num_tokens": 512,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 7.767381350199382,
+          "p50_latency_ms": 6.671328067779541,
+          "p99_latency_ms": 6.987654571533203,
+          "tflops": 6.842746337751999
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 1.9732088166840223,
+          "p50_latency_ms": 1.964352011680603,
+          "p99_latency_ms": 2.0342668819427487,
+          "tflops": 8.978644300694432
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 0.9023949303249321,
+          "p50_latency_ms": 0.8987839818000793,
+          "p99_latency_ms": 0.9392313468456268,
+          "tflops": 58.89906791570937
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.16389668577319974,
+          "p50_latency_ms": 0.16408000141382217,
+          "p99_latency_ms": 0.16966271549463274,
+          "tflops": 108.09700032931981
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 1.7491308720606678,
+          "p50_latency_ms": 1.7483999729156494,
+          "p99_latency_ms": 3.055475296974179,
+          "tflops": 30.386645811918704
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.43794722373212747,
+          "p50_latency_ms": 0.43673598766326904,
+          "p99_latency_ms": 0.4398080110549927,
+          "tflops": 40.45405276238611
+        }
+      ]
+    },
+    {
+      "num_tokens": 1024,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 8.903875887393951,
+          "p50_latency_ms": 6.98745584487915,
+          "p99_latency_ms": 7.107637863159179,
+          "tflops": 11.938670520609957
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 1.9929293344418209,
+          "p50_latency_ms": 1.9788479804992676,
+          "p99_latency_ms": 2.0228850650787353,
+          "tflops": 17.779596887675996
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 1.4252996939879197,
+          "p50_latency_ms": 1.4220159649848938,
+          "p99_latency_ms": 1.5082336425781242,
+          "tflops": 74.58111513275955
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.2975994610425198,
+          "p50_latency_ms": 0.29951998591423035,
+          "p99_latency_ms": 0.30986879467964173,
+          "tflops": 119.06432917543964
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 3.4372073870438795,
+          "p50_latency_ms": 3.38047993183136,
+          "p99_latency_ms": 3.957112019062042,
+          "tflops": 30.926397102684618
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 0.7258482589837043,
+          "p50_latency_ms": 0.7245439887046814,
+          "p99_latency_ms": 0.7284835147857666,
+          "tflops": 48.8166496970209
+        }
+      ]
+    },
+    {
+      "num_tokens": 2048,
+      "summaries": [
+        {
+          "label": "torch/layer",
+          "mean_latency_ms": 8.002537874075083,
+          "p50_latency_ms": 7.147791862487793,
+          "p99_latency_ms": 7.581172904968262,
+          "tflops": 26.566682282221873
+        },
+        {
+          "label": "torch/gemm",
+          "mean_latency_ms": 2.0100213264425597,
+          "p50_latency_ms": 1.987936019897461,
+          "p99_latency_ms": 2.030169630050659,
+          "tflops": 35.25682014002509
+        },
+        {
+          "label": "naive/layer",
+          "mean_latency_ms": 2.3964744091033934,
+          "p50_latency_ms": 2.377984046936035,
+          "p99_latency_ms": 2.4116450572013854,
+          "tflops": 88.71402104040892
+        },
+        {
+          "label": "naive/gemm",
+          "mean_latency_ms": 0.5871269625459014,
+          "p50_latency_ms": 0.592415988445282,
+          "p99_latency_ms": 0.5962969589233399,
+          "tflops": 120.70125356993744
+        },
+        {
+          "label": "persistent/layer",
+          "mean_latency_ms": 4.919176896413167,
+          "p50_latency_ms": 4.874703884124756,
+          "p99_latency_ms": 5.36419795513153,
+          "tflops": 43.21879160455047
+        },
+        {
+          "label": "persistent/gemm",
+          "mean_latency_ms": 1.316480439570215,
+          "p50_latency_ms": 1.3123679757118225,
+          "p99_latency_ms": 1.3174729239940643,
+          "tflops": 53.83062159824843
+        }
+      ]
+    }
+  ]
+}

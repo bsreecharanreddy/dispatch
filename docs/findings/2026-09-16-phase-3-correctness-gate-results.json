@@ -1,0 +1,30 @@
+{
+  "model": "deepseek-ai/deepseek-moe-16b-base",
+  "prompts": [
+    "The quick brown fox jumps over the lazy dog.",
+    "In a distant galaxy, a small crew of explorers",
+    "def fibonacci(n):"
+  ],
+  "moe_layers_patched": 27,
+  "world_size": 2,
+  "comparison": {
+    "prompt_000_logits": {
+      "positions": 11,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.6796875
+    },
+    "prompt_001_logits": {
+      "positions": 11,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.875
+    },
+    "prompt_002_logits": {
+      "positions": 7,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 1.21875
+    }
+  }
+}
