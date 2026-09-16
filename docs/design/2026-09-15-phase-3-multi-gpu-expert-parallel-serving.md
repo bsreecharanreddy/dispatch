@@ -34,8 +34,17 @@ Phase 2's skewed-load characterization instead of starting a new island.
   64 routed experts split 32/32. A larger node (4+ GPUs) was considered and
   rejected -- more cost and more to go wrong, for a model that already fits
   on one GPU, with no proportional increase in what it proves.
-- **DeepEP vs. UCCL-EP: resolved by a live check before renting anything**
-  (§5), not assumed from ADR-0002.
+- **DeepEP vs. UCCL-EP: resolved 2026-09-15**, checked live against both
+  projects' current repos rather than assumed from ADR-0002 -- **DeepEP
+  confirmed.** DeepEP's current V2 release requires Hopper (SM90) GPUs
+  specifically (not just "NVLink" generally -- Ampere SXM no longer
+  qualifies) and uses a lighter-weight NCCL Gin backend (NVSHMEM is now
+  legacy-only), a lower install risk than ADR-0002 assumed. UCCL-EP is
+  built for heterogeneous multi-node RDMA clusters (EFA/InfiniBand NIC
+  kernel modules, every documented benchmark an 8-GPU node or larger) --
+  it solves a real problem, just not this project's (one node, two
+  homogeneous GPUs, no RDMA fabric). Full resolution:
+  `docs/adr/0002-deepep-over-hand-rolled-communication.md`.
 - **Benchmark scope: decode + prefill**, both. Prefill stresses the
   dispatch/combine path more heavily (many tokens per forward pass) and is
   arguably where EP's real cost or benefit shows up most; decode keeps
@@ -118,33 +127,44 @@ same CPU/GPU split Phase 1 established:
 
 ## 7. Risk, cost, and rollout
 
-- **DeepEP vs. UCCL-EP live check first, no GPU cost.** Before renting
-  anything: check both libraries' real repo activity, install path
-  (prebuilt wheels vs. from-source NVSHMEM build -- DeepEP's known pain
-  point), and actual NVLink/GPU support matrix. Resolves ADR-0002's open
-  question honestly instead of deferring it again; whichever has the
-  safer install path wins unless one is clearly unmaintained. Recorded as
-  an ADR update once decided.
-- **Hardware chosen live at rental time** against RunPod Secure Cloud's or
-  Lambda's actual catalog and pricing -- not decided speculatively here,
-  same practice as Phase 2's live GPU choice. Target: smallest
-  NVLink-connected 2-GPU pair available.
+- **DeepEP vs. UCCL-EP: resolved during design, not deferred to the
+  rental session** (§2). DeepEP confirmed; see
+  `docs/adr/0002-deepep-over-hand-rolled-communication.md`'s "Resolution"
+  section for the full live-checked reasoning.
+- **Hardware: Hopper-class (H100/H200, SM90) specifically** -- DeepEP V2's
+  own requirement, not a generic "NVLink pair." Ampere SXM (A100) does
+  not qualify even though it has NVLink; V2 dropped it. Checked live
+  against RunPod's real catalog (2026-09-15): 2x H100 NVL on Community
+  cloud (~$5.18/hr combined) or 2x H100 SXM on Secure cloud (~$6.98/hr
+  combined) both fit comfortably inside the $25 cap for a multi-hour
+  session. Exact type/cloud/data-center chosen live at rental time
+  against real-time availability, same practice as Phase 2's live GPU
+  choice.
+- **Verify real NVLink before proceeding, not assumed from the
+  provisioning API.** Requesting `count: 2` of a GPU type does not by
+  itself prove the two instances are NVLink-connected rather than merely
+  co-located. First step on the rented pod: `nvidia-smi topo -m`, confirm
+  an `NV#` link (not `PHB`/`PXB`/`SYS`) between the two GPUs. If it isn't
+  NVLink, stop and re-provision before spending any more of the budget --
+  the whole phase depends on this being true.
 - **Budget cap: $25**, timeboxed single session: spin up, run, capture
   evidence, tear down immediately. Cost measured and logged to
   `docs/findings/`, same as every phase.
-- **Session order**: install/build the comms library -> confirm the
-  CPU-testable EP-bookkeeping suite is already green before touching
-  rented hardware -> the correctness gate -> only if correctness passes,
-  the benchmark sweep. If the correctness gate fails and can't be fixed
-  within budget, stop and document it as a real finding rather than force
-  it.
+- **Session order**: verify NVLink -> install DeepEP (NCCL Gin backend;
+  confirm the NCCL >=2.30.4 / PyTorch >=2.10 / CUDA >=12.3 floors DeepEP's
+  own README states) -> confirm the CPU-testable EP-bookkeeping suite is
+  already green before touching rented hardware -> the correctness gate
+  -> only if correctness passes, the benchmark sweep. If the correctness
+  gate fails and can't be fixed within budget, stop and document it as a
+  real finding rather than force it.
 - **Single-GPU baseline re-measured on the same GPU class** as one node of
   the rented pair -- not reused from Phase 0/1's L40/3090 numbers, since
   CLAUDE.md's benchmark rules require same-hardware comparisons.
-- **Named risk**: DeepEP's NVSHMEM build is the single most likely thing
-  to eat the session without producing a result. If the live pre-check
-  finds this too fragile, the fallback (per ADR-0002) is DeepEP without
-  its NVSHMEM fast path, or UCCL-EP -- decided live, not assumed here.
+- **Named risk**: DeepEP V2's NCCL Gin backend is the primary path now
+  (not NVSHMEM, which is legacy-only), which is a lower install-risk
+  profile than ADR-0002 originally assumed -- but the version floors
+  above are new to this project's stack (PyTorch >=2.10, NCCL >=2.30.4)
+  and worth confirming against the rented image before relying on them.
 
 ## 8. Non-goals
 

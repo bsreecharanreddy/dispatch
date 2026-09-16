@@ -1,7 +1,7 @@
 # ADR-0002: DeepEP over hand-rolled cross-GPU expert-parallel communication
 
-**Status:** Accepted 2026-09-14. Revisit at Phase 3 against actually-rented
-hardware — see "Open question" below.
+**Status:** Accepted 2026-09-14. Open question resolved 2026-09-15 during
+Phase 3 design -- see "Resolution" below.
 
 ## Context
 
@@ -60,3 +60,34 @@ project's design doc §11.
 Whether DeepEP's NVLink requirement or its cost forces a switch to UCCL-EP
 or the no-fast-path fallback is a Phase 3 decision, made against real
 rented hardware and real prices at that time — not resolved here.
+
+## Resolution (2026-09-15)
+
+Checked live (`deepseek-ai/DeepEP`'s current README, `uccl-project/uccl`'s
+`ep/README.md`, and RunPod's real GPU catalog) during Phase 3 design.
+**DeepEP confirmed, UCCL-EP rejected** — and a real constraint neither
+this ADR nor the system design doc had: DeepEP's now-current V2 release
+requires **Hopper (SM90) GPUs specifically** (or newer, e.g. SM100), not
+just "NVLink" generally — Ampere SXM (A100) no longer qualifies, V2
+dropped it. V2 also switched its primary backend from NVSHMEM to a
+lighter-weight **NCCL Gin** backend ("header-only... reuse existing NCCL
+communicators"); NVSHMEM is now legacy-only. Net effect: DeepEP's install
+risk is lower than this ADR originally assumed, not higher.
+
+UCCL-EP, by contrast, is built for heterogeneous multi-node clusters with
+RDMA NICs (EFA/InfiniBand) — its build needs NIC-specific kernel modules
+(`nvidia_peermem`/`efa_nv_peermem`), and every one of its documented
+benchmarks is an 8-GPU node or larger. It solves a real problem (running
+EP across mixed Nvidia/AMD hardware and NICs), just not this project's
+problem: a single node, two homogeneous GPUs, no RDMA fabric at all. It
+would add build complexity here without buying anything back.
+
+Real RunPod pricing, checked live: 2x Hopper-class GPU (H100 NVL on
+Community cloud, ~$5.18/hr combined; H100 SXM on Secure cloud, ~$6.98/hr
+combined) still fits comfortably inside Phase 3's $25 cap for a
+multi-hour session — the cost concern this ADR raised does not force a
+fallback. The design doc's hardware target is corrected from generic
+"NVLink-connected pair" to Hopper-class (H100/H200) specifically, with a
+live `nvidia-smi topo -m` check that the two rented GPUs are actually
+NVLink-connected (not just co-located) before proceeding — see
+`docs/design/2026-09-15-phase-3-multi-gpu-expert-parallel-serving.md` §7.
