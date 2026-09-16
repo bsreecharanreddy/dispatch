@@ -113,7 +113,7 @@ docs/STATUS.md                                          # Task 5
 `create_pod` currently hardcodes `"gpu": {"id": gpu_type_id, "count": 1}`
 -- Phase 3 is the first phase that needs more than one GPU per pod.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `tests/unit/test_runpod_client.py`, add:
 
@@ -134,12 +134,12 @@ def test_create_pod_requests_multiple_gpus_when_asked() -> None:
     assert session.calls[0]["json"]["gpu"] == {"id": "NVIDIA H100 NVL", "count": 2}
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `uv run pytest tests/unit/test_runpod_client.py::test_create_pod_requests_multiple_gpus_when_asked -v`
 Expected: FAIL with `TypeError: create_pod() got an unexpected keyword argument 'gpu_count'`.
 
-- [ ] **Step 3: Add the parameter**
+- [x] **Step 3: Add the parameter**
 
 In `scripts/gpu/runpod_client.py`:
 
@@ -171,14 +171,14 @@ def create_pod(  # noqa: PLR0913 -- a pod-create request has this many independe
 
 (Only `gpu_count: int = 1,` and `"count": gpu_count` are new.)
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 Run: `uv run pytest tests/unit/test_runpod_client.py -v`
 Expected: all pass, including the existing
 `test_create_pod_sends_expected_body_and_parses_response` (still gets
 `count: 1` by default).
 
-- [ ] **Step 5: Thread it through `provision.py`'s CLI**
+- [x] **Step 5: Thread it through `provision.py`'s CLI**
 
 In `scripts/gpu/provision.py`, update `_cmd_create`:
 
@@ -201,7 +201,7 @@ and `build_parser`, after the existing `create.add_argument("--disk-gb", ...)`:
     create.add_argument("--gpu-count", type=int, default=1, dest="gpu_count")
 ```
 
-- [ ] **Step 6: Update the existing fake in `test_provision.py` to accept the new kwarg**
+- [x] **Step 6: Update the existing fake in `test_provision.py` to accept the new kwarg**
 
 `test_main_create_invokes_create_pod_and_prints_result`'s `fake_create_pod`
 must accept `gpu_count` now that `_cmd_create` always passes it:
@@ -228,7 +228,7 @@ def test_main_create_invokes_create_pod_and_prints_result(
     assert "pod_999" in capsys.readouterr().out
 ```
 
-- [ ] **Step 7: Add the new provision.py tests**
+- [x] **Step 7: Add the new provision.py tests**
 
 ```python
 def test_build_parser_create_defaults_to_a_single_gpu() -> None:
@@ -275,12 +275,12 @@ def test_main_create_passes_gpu_count_through(monkeypatch: pytest.MonkeyPatch) -
     assert captured["gpu_count"] == 2
 ```
 
-- [ ] **Step 8: Run the full suite and typecheck**
+- [x] **Step 8: Run the full suite and typecheck**
 
 Run: `uv run pytest tests/unit/test_runpod_client.py tests/unit/test_provision.py -v && uv run mypy src scripts tests`
 Expected: all pass, mypy clean.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add scripts/gpu/runpod_client.py scripts/gpu/provision.py tests/unit/test_runpod_client.py tests/unit/test_provision.py
