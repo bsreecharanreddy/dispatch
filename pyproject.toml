@@ -70,10 +70,21 @@ module = ["triton", "triton.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
+# deep_ep needs 2 real GPUs to even build -- neither this dev box nor CI has
+# that, same boundary as triton above.
+[[tool.mypy.overrides]]
+module = ["deep_ep", "deep_ep.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 [tool.coverage.run]
 source = ["src/dispatch"]
 
 [tool.pytest.ini_options]
+# scripts/gpu/deepep_smoke_test.py matches pytest's default *_test.py glob
+# but isn't a pytest test (it needs torch.distributed + 2 real GPUs +
+# deep_ep, run via torchrun, not pytest) -- scope collection to tests/.
+testpaths = ["tests"]
 markers = [
     "gpu: needs a real CUDA device -- excluded from CI, run locally or on a rented instance",
     "slow: excluded from the fast inner-loop selection",
