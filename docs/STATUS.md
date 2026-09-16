@@ -190,7 +190,45 @@ buried. Full account:
 kernel correctness + $0.5916 the measured run) -- both well under their
 stated caps ($3 and $5 respectively).
 
+**Phase 1 merged to `main`, 2026-09-15** (PR #2).
+
+## Phase 2 progress
+
+Plan: `docs/plans/2026-09-15-phase-2-vllm-benchmark-contribution-plan.md`.
+Design: `docs/design/2026-09-15-phase-2-vllm-benchmark-contribution.md`.
+Research found neither vLLM's nor SGLang's official MoE benchmark/tuning
+harness models skewed (zipf) expert load -- both generate gating logits
+near-uniformly only. Ported Phase 1's zipf-vs-uniform load idea into
+vLLM's `benchmarks/kernels/benchmark_moe.py` as an opt-in
+`--expert-load-distribution {uniform,zipf}` flag (default `uniform`,
+existing behavior unchanged).
+
+While opening what was originally planned as a separate prerequisite PR
+(a `get_model_params` fix so the script recognizes
+`deepseek-ai/deepseek-moe-16b-base`'s `DeepseekForCausalLM` architecture
+string, which it didn't), discovered `vllm-project/vllm`'s own `AGENTS.md`
+governing AI-assisted contributions -- closed that standalone PR
+(non-compliant: no AI-assistance disclosure, and their own policy
+discourages one-off tiny-edit PRs) and re-opened as a single PR with the
+fix folded in as its first commit, fully AGENTS.md-compliant this time
+(AI-assistance disclosure, duplicate-work check, test results, all in
+the PR body).
+
+**Open PR: `vllm-project/vllm#57100`** ("[Benchmark] Add skewed (zipf)
+expert-load coverage to benchmark_moe.py"). Measured on one rented RTX
+3090: `--tune` under uniform vs. zipf routing picks a **different winning
+Triton config at 4 of 5 tested batch sizes** (1/2/4/8/16, E=64, topk=6) --
+real, moderate divergence, not dramatic, reported at that strength.
+
+**Total Phase 2 GPU cost: $0.77**, against a $3 cap. Full account,
+including three real environment issues found and fixed (a failed
+precompiled-wheel install, a local-package-shadowing bug affecting Ray
+workers, and RunPod's proxy-only SSH access for this pod) and every
+deviation from the plan and why:
+`docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
+
 ## Next step
 
-Phase 1 is complete and ready to push as a single PR (per this repo's
-one-branch-per-phase convention). Phase 2 is not yet planned.
+Phase 2's PR is open and awaiting maintainer review. No further work is
+planned on it beyond responding to review feedback. Phase 3 is not yet
+planned.
