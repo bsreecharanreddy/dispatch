@@ -73,11 +73,29 @@ def patch_moe_infer_quantized(
     patched = 0
     for module, experts in _iter_validated_moe_layers(model):
         quantized_weights = quantize_stacked_weights(stack_expert_weights(experts))
+        _free_expert_weights(experts)
         module.moe_infer = _grouped_moe_infer_quantized(  # type: ignore[assignment]
             quantized_weights, matmul, block_m
         )
         patched += 1
     return patched
+
+
+def _free_expert_weights(experts: torch.nn.ModuleList) -> None:
+    """Releases each expert's original bf16 weight now that moe_infer's
+    quantized closure never reads `experts` again. stack_expert_weights
+    re-points every expert's Linear at a *view* into one shared bf16
+    tensor rather than copying it (so building that stack costs no extra
+    memory) -- but that means those views keep the whole bf16 tensor
+    resident for the model's lifetime unless something drops them. Left
+    alone, a quantized model holds its bf16 weights AND their int8 copies
+    at once, defeating the point of quantizing (and OOMing on real
+    hardware at DeepSeekMoE-16B's scale -- found running Phase 5a's
+    measured session)."""
+    for expert in experts:
+        for name in ("gate_proj", "up_proj", "down_proj"):
+            linear = getattr(expert, name)
+            linear.weight = torch.nn.Parameter(linear.weight.new_empty(0), requires_grad=False)
 
 
 def _grouped_moe_infer(

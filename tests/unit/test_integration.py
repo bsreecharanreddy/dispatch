@@ -142,6 +142,21 @@ def test_patched_quantized_model_matches_weights_quantized_in_place() -> None:
     torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
 
 
+def test_patch_quantized_frees_the_original_bf16_expert_weights() -> None:
+    """A quantized model must not keep both the bf16 originals and their
+    int8 copies resident -- that defeats quantizing at all, and OOMed a
+    real rented-GPU run at DeepSeekMoE-16B's scale (Phase 5a)."""
+    torch.manual_seed(0)
+    model = FakeModel(num_moe_layers=2)
+
+    patch_moe_infer_quantized(model, torch_grouped_matmul_dequant)
+
+    for layer in model.moe_layers:
+        for expert in cast(torch.nn.ModuleList, layer.experts):
+            for name in ("gate_proj", "up_proj", "down_proj"):
+                assert getattr(expert, name).weight.numel() == 0
+
+
 def test_patch_quantized_rejects_experts_that_are_not_a_module_list() -> None:
     class Odd(torch.nn.Module):
         def __init__(self) -> None:
