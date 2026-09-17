@@ -341,11 +341,80 @@ instruction once both correctness gates had passed. Full account:
 **Total Phase 4 GPU cost: $10.94** of the $40 cap, 4x H100 SXM, 47
 minutes.
 
+## Phase 5a progress
+
+Design: `docs/design/2026-09-16-phase-5a-quantization.md`. Plan:
+`docs/plans/2026-09-16-phase-5a-quantization-plan.md`. Branch
+`phase-5a-quantization`. Split from Phase 5 (quantization +
+speculative decoding) into two sub-phases; 5b (speculative decoding) is
+separate, later work.
+
+- [x] Task 1: `QuantizedTensor`, per-channel int8 quantize/dequantize (`quantization.py`)
+- [x] Task 2: Quantized MoE forward path + memory-footprint helpers
+- [x] Task 3: Triton int8 grouped-GEMM kernel + backend resolver (`grouped_gemm_int8.py`, `backends.py`)
+- [x] Task 4: `patch_moe_infer_quantized`, sharing layer-iteration with `patch_moe_infer`
+- [x] Task 5: `--moe-kernel quantized` wired through `run_baseline.py`
+- [x] Task 6: GPU rental runbook -- correctness gate, three-way measured run, memory footprint, cost
+- [x] Task 7: this update
+
+**Phase 5a is complete.** `make check` green throughout (119 tests,
+lint and `mypy --strict` clean).
+
+**Kernel-level correctness gate passed** on a real NVIDIA L40 (RunPod
+Secure Cloud): the int8 kernel's first real-hardware run, 15/15 GPU
+tests passed against `torch_grouped_matmul_dequant` (an independent
+quantize-then-dequantize-then-eager-matmul reference); the existing bf16
+kernels re-verified at 25/25.
+
+**A real bug found and fixed on real hardware, none caught by CPU-only
+tests:** `patch_moe_infer_quantized` quantized each layer's stacked bf16
+weights into int8 but never released the bf16 originals --
+`stack_expert_weights` re-points every expert's `Linear.weight` at a
+*view* into one shared bf16 tensor (so building that stack costs no
+extra memory in the existing bf16 path), and those views kept the whole
+bf16 tensor resident even after quantizing, holding both copies at once
+and OOMing a 44GB L40 at DeepSeekMoE-16B's real scale. Fixed with
+`_free_expert_weights` (frees each expert's original weight right after
+quantizing, since the quantized closure never reads `experts` again) and
+a new CPU regression test asserting those weights are actually freed.
+
+**Measured three-way run** (bf16, single L40, unbatched eager decode, 15
+runs per config, 27/27 MoE layers patched): stock **12.13 tok/s** ($18.78
+per 1M tokens), naive bf16 kernel **20.97 tok/s** (**+72.9%**, $10.86 per
+1M tokens -- consistent with Phase 1's separately-measured +67.2% on the
+same GPU class), int8 quantized kernel **20.72 tok/s** (**+70.9%** over
+stock, but **-1.2%** vs. the naive kernel it's built on -- essentially a
+throughput tie, expected: this is a weight-only quantization meant to
+save memory bandwidth/footprint, not FLOPs, and the naive kernel already
+runs `tl.dot` at native tensor-core precision).
+
+**Memory footprint**, computed directly from the real model's stacked
+expert weights across all 27 MoE layers: bf16 **27.84 GiB** -> int8
+**13.95 GiB**, a **49.89%** reduction (just under a clean 50% from the
+per-channel fp32 scale overhead).
+
+**Model-level agreement** (quantized vs. the naive bf16 run, per the
+design doc's two-tier bar): **perfect top-1 agreement and mutual top-k
+membership at every tested position**, all 3 prompts -- stronger than
+the bar required, which explicitly allowed for real divergence here.
+
+**Two RunPod Community Cloud pods hit the same real host-level bug this
+session** (`cuInit()` returning `CUDA_ERROR_UNKNOWN` even against the
+base image's own stock torch, confirmed via a raw ctypes test) before a
+Secure Cloud L40 worked immediately -- a new environment finding, not
+previously documented in this project. `transformers==4.57.6` +
+`DynamicCache.get_usable_length` monkeypatch (Phase 0/1/3/4's fix) was
+still needed; new this session, `HF_HUB_ENABLE_HF_TRANSFER=1` was set on
+the pod with `hf_transfer` not installed.
+
+**Total Phase 5a GPU cost: $1.9543** of the $5 cap (39.1%), across all
+three pods including both abandoned Community Cloud attempts. Full
+account: `docs/findings/2026-09-17-phase-5a-quantization-run.md`.
+
 ## Next step
 
-Phase 4 is complete and ready to push as a PR (`make check` green,
-correctness gates passed, findings recorded, cost well under cap).
-Phase 3's PR (#3) already merged. Phase 2's PR is still open and awaiting
-maintainer review; no further work planned on it beyond responding to
-review feedback. Phase 5 (quantization + speculative decoding) is not
+Phase 4 is merged (PR #4). Phase 5a is complete and ready to push as a
+PR. Phase 3's PR (#3) already merged. Phase 2's PR is still open and
+awaiting maintainer review; no further work planned on it beyond
+responding to review feedback. Phase 5b (speculative decoding) is not
 yet planned.
