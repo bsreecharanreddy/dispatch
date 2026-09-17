@@ -101,4 +101,4 @@ class DraftModelDrafter:
 
     def on_accepted(self, accepted_len: int, rejected_len: int) -> None:
         if self.past_key_values is not None:
-            self.past_key_values.crop(rejected_len)
+            self.past_key_values.crop(-rejected_len)

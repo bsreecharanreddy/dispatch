@@ -89,7 +89,9 @@ class _FakeCache:
         self.length = length
 
     def crop(self, tokens_to_remove: int) -> None:
-        self.length -= tokens_to_remove
+        # transformers>=5.17.0 uses negative integers to remove tokens
+        # (e.g., crop(-2) removes the last 2 tokens).
+        self.length += tokens_to_remove
 
 
 class _FakeOutputs:
@@ -193,7 +195,10 @@ class _FakeTrackingCache:
         return len(self.tokens)
 
     def crop(self, tokens_to_remove: int) -> None:
-        del self.tokens[len(self.tokens) - tokens_to_remove :]
+        # transformers>=5.17.0 uses negative integers to remove tokens.
+        if tokens_to_remove == 0:
+            return
+        del self.tokens[tokens_to_remove:]
 
 
 class _FakeTrackingOutputs:
