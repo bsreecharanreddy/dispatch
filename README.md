@@ -61,7 +61,7 @@ cut expert-weight memory **49.89%** at perfect model-level agreement, while
 also surfacing and fixing a real bug where the naive quantized path was
 holding both the bf16 and int8 copies in memory at once (Phase 5a).
 
-**119 tests, `make check` green throughout Phase 5a** (lint, `mypy --strict`,
+**123 tests, `make check` green throughout Phase 5a** (lint, `mypy --strict`,
 and the full non-GPU suite) — GPU-dependent tests are marked and excluded
 from CI by design, then run for real on rented hardware every phase.
 

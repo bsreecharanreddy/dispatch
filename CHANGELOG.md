@@ -12,40 +12,11 @@ deletes its own evidence is not a retraction.
 No phase shipped yet (`v0.1.0` is still the scaffold version; a tag lands
 once a phase's exit criteria are actually met).
 
-- **Phase 1 (custom Triton grouped-GEMM kernel) complete**, 2026-09-15
-  (`docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`). Built and
-  tested: a CPU-only MoE reference and grouped-GEMM contract, a naive and
-  a persistent cache-aware Triton kernel, a backend registry and
-  micro-benchmark CLI, and real-model integration (`--moe-kernel`,
-  `--compare-reference`) — `make check` green throughout (73 tests, lint
-  and `mypy --strict` clean). Two real rented-GPU sessions:
-  - **Kernel correctness** (RTX 3090, $0.06): both kernels passed 25/25
-    correctness tests on the first real execution — no kernel bugs
-    found. A mutation check (forcing every tile to read expert 0's
-    weights) turned 24/25 red, confirming the suite can fail.
-  - **The measured run** (L40, $0.59, same GPU class as Phase 0): both
-    kernels re-verified correct (25/25) on this card, then swapped into
-    `deepseek-ai/deepseek-moe-16b-base`'s real 27 MoE layers. Measured
-    **12.55 -> 20.98 tokens/sec (naive kernel, +67.2%)**, **12.55 ->
-    20.80 tokens/sec (persistent kernel, +65.7%)** against DeepSeek's
-    own stock `moe_infer`, at perfect mutual top-5 and top-1 logit
-    agreement across every tested position (bf16, single L40, unbatched
-    eager-mode decode, 3 prompts x 5 repetitions, 64 new tokens — same
-    config as Phase 0's baseline). Cost per 1M generated tokens: $18.15
-    (stock) -> $10.86 (naive). A token-count micro-benchmark (1 to 2048
-    tokens, zipf and uniform routing) found the persistent kernel ties
-    naive at the 1-token/step granularity that drives decode throughput
-    (unbatched decode gives each expert too few rows for L2 reuse to
-    matter, exactly as the plan's own risk section predicted before the
-    run happened), wins 3-8% at 16-128 tokens, then loses by up to 14% at
-    512-2048 — a workload-specific result recorded rather than buried.
-    Total GPU cost across both sessions: **$0.65**.
-    Full account: `docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
 - **Phase 5a (int8 weight-only quantization) complete**, 2026-09-17
   (`docs/plans/2026-09-16-phase-5a-quantization-plan.md`). Self-computed,
   per-output-channel int8 quantization extending the Triton kernel
   itself (not sourced from bitsandbytes/AWQ) — `make check` green
-  throughout (122 tests). Kernel-level correctness gate passed on a real
+  throughout (123 tests). Kernel-level correctness gate passed on a real
   L40 (15/15 int8, 25/25 bf16). Measured on the real
   `deepseek-ai/deepseek-moe-16b-base` model: int8 kernel **+70.9%** over
   stock (a throughput tie with the bf16 naive kernel it's built on,
@@ -98,6 +69,35 @@ once a phase's exit criteria are actually met).
   Cost: **$0.77**. This phase landed no code in `dispatch` itself, only
   docs — its actual contribution is the upstreamed PR. Full account:
   `docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
+- **Phase 1 (custom Triton grouped-GEMM kernel) complete**, 2026-09-15
+  (`docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`). Built and
+  tested: a CPU-only MoE reference and grouped-GEMM contract, a naive and
+  a persistent cache-aware Triton kernel, a backend registry and
+  micro-benchmark CLI, and real-model integration (`--moe-kernel`,
+  `--compare-reference`) — `make check` green throughout (73 tests, lint
+  and `mypy --strict` clean). Two real rented-GPU sessions:
+  - **Kernel correctness** (RTX 3090, $0.06): both kernels passed 25/25
+    correctness tests on the first real execution — no kernel bugs
+    found. A mutation check (forcing every tile to read expert 0's
+    weights) turned 24/25 red, confirming the suite can fail.
+  - **The measured run** (L40, $0.59, same GPU class as Phase 0): both
+    kernels re-verified correct (25/25) on this card, then swapped into
+    `deepseek-ai/deepseek-moe-16b-base`'s real 27 MoE layers. Measured
+    **12.55 -> 20.98 tokens/sec (naive kernel, +67.2%)**, **12.55 ->
+    20.80 tokens/sec (persistent kernel, +65.7%)** against DeepSeek's
+    own stock `moe_infer`, at perfect mutual top-5 and top-1 logit
+    agreement across every tested position (bf16, single L40, unbatched
+    eager-mode decode, 3 prompts x 5 repetitions, 64 new tokens — same
+    config as Phase 0's baseline). Cost per 1M generated tokens: $18.15
+    (stock) -> $10.86 (naive). A token-count micro-benchmark (1 to 2048
+    tokens, zipf and uniform routing) found the persistent kernel ties
+    naive at the 1-token/step granularity that drives decode throughput
+    (unbatched decode gives each expert too few rows for L2 reuse to
+    matter, exactly as the plan's own risk section predicted before the
+    run happened), wins 3-8% at 16-128 tokens, then loses by up to 14% at
+    512-2048 — a workload-specific result recorded rather than buried.
+    Total GPU cost across both sessions: **$0.65**.
+    Full account: `docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
 - **Phase 0 (baseline) complete**, 2026-09-14
   (`docs/plans/2026-09-14-phase-0-baseline-plan.md`). Built and tested: a
   RunPod REST client and provisioning CLI, a token-by-token-timed
