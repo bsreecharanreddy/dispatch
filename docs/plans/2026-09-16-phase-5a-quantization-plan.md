@@ -904,15 +904,17 @@ Add to `tests/unit/test_integration.py` (add `import copy` to the top):
 import copy
 
 from dispatch.kernels.integration import patch_moe_infer, patch_moe_infer_quantized
-from dispatch.kernels.quantization import dequantize_int8, quantize_per_channel_int8, torch_grouped_matmul_dequant
+from dispatch.kernels.quantization import (
+    dequantize_int8,
+    quantize_per_channel_int8,
+    torch_grouped_matmul_dequant,
+)
 
 
 def test_patch_quantized_counts_only_moe_layers() -> None:
     torch.manual_seed(0)
 
-    assert (
-        patch_moe_infer_quantized(FakeModel(num_moe_layers=3), torch_grouped_matmul_dequant) == 3
-    )
+    assert patch_moe_infer_quantized(FakeModel(num_moe_layers=3), torch_grouped_matmul_dequant) == 3
 
 
 def test_patched_quantized_model_matches_weights_quantized_in_place() -> None:
