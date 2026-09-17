@@ -78,8 +78,10 @@ def pad_and_batch_caches(
             key, value = layer_kv(raw_layer)
             if pad_len > 0:
                 pad_shape = (1, key.shape[1], pad_len, key.shape[3])
-                key = torch.cat([torch.zeros(pad_shape, dtype=key.dtype), key], dim=2)
-                value = torch.cat([torch.zeros(pad_shape, dtype=value.dtype), value], dim=2)
+                key_pad = torch.zeros(pad_shape, dtype=key.dtype, device=key.device)
+                value_pad = torch.zeros(pad_shape, dtype=value.dtype, device=value.device)
+                key = torch.cat([key_pad, key], dim=2)
+                value = torch.cat([value_pad, value], dim=2)
             per_layer_keys[layer_idx].append(key)
             per_layer_values[layer_idx].append(value)
 
