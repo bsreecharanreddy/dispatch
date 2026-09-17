@@ -258,7 +258,9 @@ git commit -m "feat: add int8 per-channel weight quantization primitives"
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `tests/unit/test_quantization.py`:
+At the top of `tests/unit/test_quantization.py`, replace Task 1's single
+`from dispatch.kernels.quantization import dequantize_int8,
+quantize_per_channel_int8` line with:
 
 ```python
 from dispatch.kernels.moe_forward import (
@@ -268,14 +270,24 @@ from dispatch.kernels.moe_forward import (
     torch_grouped_matmul,
 )
 from dispatch.kernels.quantization import (
+    dequantize_int8,
     grouped_moe_routed_quantized,
+    quantize_per_channel_int8,
     quantize_stacked_weights,
     quantized_stacked_weights_nbytes,
     stacked_weights_nbytes,
     torch_grouped_matmul_dequant,
 )
 from dispatch.kernels.reference_moe import MoEConfig, ReferenceMoE
+```
 
+(All imports stay consolidated at the top of the file -- `ruff`'s `E402`
+rule, enabled in this repo, rejects a module-level import placed after
+existing function/class definitions.)
+
+Then append the following below Task 1's existing tests:
+
+```python
 TOY_CONFIG = MoEConfig(
     hidden_size=8,
     moe_intermediate_size=16,
@@ -368,18 +380,30 @@ etc. don't exist yet.
 
 - [ ] **Step 3: Write the minimal implementation**
 
-Append to `src/dispatch/kernels/quantization.py`:
+At the top of `src/dispatch/kernels/quantization.py`, replace Task 1's
+import block with (all imports stay consolidated at the top -- `ruff`'s
+`E402`, enabled in this repo, rejects a module-level import placed after
+existing definitions):
 
 ```python
-from collections.abc import Callable
+from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+
+import torch
 import torch.nn.functional as F  # noqa: N812 -- F is the universal PyTorch convention
 
 from dispatch.kernels.grouping import group_tokens_by_expert, ungroup_and_combine
 from dispatch.kernels.moe_forward import StackedExpertWeights, torch_grouped_matmul
 from dispatch.kernels.tile_schedule import TileSchedule, build_tile_schedule
 
+INT8_MAX = 127
+```
 
+Then append the following below Task 1's existing `dequantize_int8`:
+
+```python
 @dataclass(frozen=True)
 class QuantizedStackedExpertWeights:
     """Each projection's int8-quantized weights for every expert."""
@@ -609,12 +633,16 @@ def test_int8_kernel_rejects_non_cuda_tensors() -> None:
 
 - [ ] **Step 2: Write the failing CPU-only backend-registry test**
 
-Append to `tests/unit/test_backends.py`:
+At the top of `tests/unit/test_backends.py`, change the existing
+`from dispatch.kernels.backends import resolve_backend` line to:
 
 ```python
-from dispatch.kernels.backends import resolve_quantized_backend
+from dispatch.kernels.backends import resolve_backend, resolve_quantized_backend
+```
 
+Then append the following test to the end of the file:
 
+```python
 def test_quantized_backend_maps_to_grouped_matmul_int8(monkeypatch: pytest.MonkeyPatch) -> None:
     stand_in = types.ModuleType("dispatch.kernels.grouped_gemm_int8")
     stand_in.grouped_matmul_int8 = object()  # type: ignore[attr-defined]
@@ -898,19 +926,32 @@ Expected: 3 passed (this is the baseline the refactor in Step 3 must not break).
 
 - [ ] **Step 2: Write the failing tests for the new function**
 
-Add to `tests/unit/test_integration.py` (add `import copy` to the top):
+At the top of `tests/unit/test_integration.py`: add `import copy` to the
+stdlib import group (before `import pytest`), change the existing
+`from dispatch.kernels.integration import patch_moe_infer` line to
+`from dispatch.kernels.integration import patch_moe_infer,
+patch_moe_infer_quantized`, and add a new import block for
+`dispatch.kernels.quantization`:
 
 ```python
 import copy
 
+import pytest
+import torch
+
 from dispatch.kernels.integration import patch_moe_infer, patch_moe_infer_quantized
+from dispatch.kernels.moe_forward import torch_grouped_matmul
 from dispatch.kernels.quantization import (
     dequantize_int8,
     quantize_per_channel_int8,
     torch_grouped_matmul_dequant,
 )
+from dispatch.kernels.reference_moe import MoEConfig, ReferenceMoE
+```
 
+Then append the following tests to the end of the file:
 
+```python
 def test_patch_quantized_counts_only_moe_layers() -> None:
     torch.manual_seed(0)
 
@@ -967,20 +1008,28 @@ Expected: FAIL -- `patch_moe_infer_quantized` doesn't exist yet.
 
 - [ ] **Step 4: Refactor `patch_moe_infer` and add `patch_moe_infer_quantized`**
 
-Replace `src/dispatch/kernels/integration.py`'s `patch_moe_infer` function
-and everything below it with:
+At the top of `src/dispatch/kernels/integration.py`, change
+`from collections.abc import Callable` to
+`from collections.abc import Callable, Iterator`, and add a new import
+block right after the existing `from dispatch.kernels.moe_forward import
+(...)` block:
 
 ```python
-from collections.abc import Callable, Iterator
-
 from dispatch.kernels.quantization import (
     QuantizedGroupedMatmul,
     QuantizedStackedExpertWeights,
     grouped_moe_routed_quantized,
     quantize_stacked_weights,
 )
+```
 
+(All imports stay consolidated at the top of the file -- `ruff`'s `E402`,
+enabled in this repo, rejects a module-level import placed after existing
+definitions.)
 
+Then replace `patch_moe_infer` and everything below it with:
+
+```python
 def _iter_validated_moe_layers(
     model: torch.nn.Module,
 ) -> Iterator[tuple[torch.nn.Module, torch.nn.ModuleList]]:
