@@ -52,6 +52,18 @@ def test_an_all_zero_channel_does_not_produce_nan() -> None:
     assert quantized.data[0, 0].abs().sum() == 0
 
 
+def test_an_all_zero_channel_with_float16_does_not_produce_nan() -> None:
+    weight = torch.zeros(1, 2, 4, dtype=torch.float16)
+    weight[0, 1] = torch.tensor([1.0, -2.0, 3.0, -4.0], dtype=torch.float16)
+
+    quantized = quantize_per_channel_int8(weight)
+    dequantized = dequantize_int8(quantized)
+
+    assert torch.isfinite(dequantized).all()
+    assert torch.equal(dequantized[0, 0], torch.zeros(4))
+    assert quantized.data[0, 0].abs().sum() == 0
+
+
 def test_scale_is_per_expert_per_output_channel() -> None:
     weight = torch.zeros(2, 2, 3)
     weight[0, 0] = torch.tensor([1.0, -1.0, 0.5])

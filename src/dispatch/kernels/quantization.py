@@ -27,7 +27,7 @@ def quantize_per_channel_int8(weight: torch.Tensor) -> QuantizedTensor:
     An all-zero channel's scale is clamped away from zero so dividing by it
     is a no-op (result: 0) rather than a NaN-producing divide-by-zero."""
     absmax = weight.detach().abs().amax(dim=-1)
-    scale = (absmax / INT8_MAX).clamp(min=torch.finfo(torch.float32).tiny)
+    scale = (absmax / INT8_MAX).clamp(min=torch.finfo(weight.dtype).tiny)
     quantized = (weight.detach() / scale.unsqueeze(-1)).round().clamp(-INT8_MAX, INT8_MAX)
     return QuantizedTensor(data=quantized.to(torch.int8), scale=scale.to(torch.float32))
 
