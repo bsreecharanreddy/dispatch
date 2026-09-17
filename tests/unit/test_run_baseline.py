@@ -152,3 +152,80 @@ def test_run_baseline_refuses_a_kernel_run_that_patches_nothing() -> None:
             max_new_tokens=3,
             moe_kernel="torch",
         )
+
+
+def test_run_baseline_routes_the_quantized_kernel_through_its_own_patch_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_resolve_quantized_backend() -> object:
+        calls["resolved"] = True
+        return "the-quantized-matmul"
+
+    def fake_patch_moe_infer_quantized(model: object, matmul: object) -> int:
+        calls["patched_model"] = model
+        calls["patched_matmul"] = matmul
+        return 27
+
+    monkeypatch.setattr(
+        run_baseline_module, "load_model", lambda *a, **k: ("the-model", "the-tokenizer")
+    )
+    monkeypatch.setattr(
+        run_baseline_module, "resolve_quantized_backend", fake_resolve_quantized_backend
+    )
+    monkeypatch.setattr(
+        run_baseline_module, "patch_moe_infer_quantized", fake_patch_moe_infer_quantized
+    )
+    monkeypatch.setattr(run_baseline_module, "generate_with_timings", lambda *a, **k: object())
+    monkeypatch.setattr(run_baseline_module, "capture_reference_logits", lambda *a, **k: {})
+
+    _, _, moe_layers_patched = run_baseline_module.run_baseline(
+        "some/model",
+        device="cpu",
+        dtype=torch.float32,
+        trust_remote_code=False,
+        prompts=["hi"],
+        repetitions=1,
+        max_new_tokens=1,
+        moe_kernel="quantized",
+    )
+
+    assert moe_layers_patched == 27
+    assert calls == {
+        "resolved": True,
+        "patched_model": "the-model",
+        "patched_matmul": "the-quantized-matmul",
+    }
+
+
+def test_run_baseline_refuses_a_quantized_run_that_patches_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_resolve_quantized_backend() -> object:
+        return object()
+
+    def fake_patch_moe_infer_quantized(model: object, matmul: object) -> int:
+        return 0
+
+    monkeypatch.setattr(
+        run_baseline_module, "load_model", lambda *a, **k: ("the-model", "the-tokenizer")
+    )
+    monkeypatch.setattr(
+        run_baseline_module, "resolve_quantized_backend", fake_resolve_quantized_backend
+    )
+    monkeypatch.setattr(
+        run_baseline_module, "patch_moe_infer_quantized", fake_patch_moe_infer_quantized
+    )
+
+    with pytest.raises(RuntimeError, match="patched no MoE layers"):
+        run_baseline_module.run_baseline(
+            "some/model",
+            device="cpu",
+            dtype=torch.float32,
+            trust_remote_code=False,
+            prompts=["hi"],
+            repetitions=1,
+            max_new_tokens=1,
+            moe_kernel="quantized",
+        )

@@ -23,8 +23,8 @@ from dispatch.benchmark.reference import (
     load_reference,
     save_reference,
 )
-from dispatch.kernels.backends import BACKENDS, resolve_backend
-from dispatch.kernels.integration import patch_moe_infer
+from dispatch.kernels.backends import BACKENDS, resolve_backend, resolve_quantized_backend
+from dispatch.kernels.integration import patch_moe_infer, patch_moe_infer_quantized
 
 DEFAULT_PROMPTS = [
     "The quick brown fox jumps over the lazy dog.",
@@ -49,13 +49,15 @@ def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-faci
         model_name, device=device, dtype=dtype, trust_remote_code=trust_remote_code
     )
     moe_layers_patched = 0
-    if moe_kernel != "none":
+    if moe_kernel == "quantized":
+        moe_layers_patched = patch_moe_infer_quantized(model, resolve_quantized_backend())
+    elif moe_kernel != "none":
         moe_layers_patched = patch_moe_infer(model, resolve_backend(moe_kernel))
-        if moe_layers_patched == 0:
-            raise RuntimeError(
-                f"--moe-kernel {moe_kernel} patched no MoE layers: {model_name} has no "
-                "moe_infer to replace, so this run would time the stock model under a kernel's name"
-            )
+    if moe_kernel != "none" and moe_layers_patched == 0:
+        raise RuntimeError(
+            f"--moe-kernel {moe_kernel} patched no MoE layers: {model_name} has no "
+            "moe_infer to replace, so this run would time the stock model under a kernel's name"
+        )
 
     runs = [
         generate_with_timings(
@@ -78,7 +80,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--max-new-tokens", type=int, default=64)
     parser.add_argument("--output-dir", type=Path, default=Path("docs/findings"))
     parser.add_argument("--run-label", default=time.strftime("%Y-%m-%d-baseline"))
-    parser.add_argument("--moe-kernel", default="none", choices=["none", *BACKENDS])
+    parser.add_argument("--moe-kernel", default="none", choices=["none", *BACKENDS, "quantized"])
     parser.add_argument(
         "--compare-reference",
         type=Path,
