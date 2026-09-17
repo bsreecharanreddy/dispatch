@@ -811,9 +811,8 @@ def run_speculative_rounds(  # noqa: PLR0913 -- each of these is an independent,
             target_predictions = outputs.logits[0, offset:, :].argmax(dim=-1)
 
             accepted_len = 0
-            while (
-                accepted_len < num_candidates
-                and int(target_predictions[accepted_len]) == int(candidates[0, accepted_len])
+            while accepted_len < num_candidates and int(target_predictions[accepted_len]) == int(
+                candidates[0, accepted_len]
             ):
                 accepted_len += 1
             accepted_lengths.append(accepted_len)
@@ -1109,7 +1108,11 @@ def _fake_run_speculative_bench(
 def test_build_drafter_none_returns_none() -> None:
     assert (
         build_drafter(
-            "none", draft_model_name="x", device="cpu", dtype=torch.float32, prompt_lookup_ngram_size=3
+            "none",
+            draft_model_name="x",
+            device="cpu",
+            dtype=torch.float32,
+            prompt_lookup_ngram_size=3,
         )
         is None
     )
@@ -1148,7 +1151,11 @@ def test_build_drafter_draft_model_loads_and_wraps_it(monkeypatch: pytest.Monkey
 def test_build_drafter_rejects_an_unknown_name() -> None:
     with pytest.raises(ValueError, match="unknown drafter"):
         build_drafter(
-            "bogus", draft_model_name="x", device="cpu", dtype=torch.float32, prompt_lookup_ngram_size=3
+            "bogus",
+            draft_model_name="x",
+            device="cpu",
+            dtype=torch.float32,
+            prompt_lookup_ngram_size=3,
         )
 
 
@@ -1177,7 +1184,9 @@ def test_main_writes_results_and_generated_tokens(
     assert results["model"] == "tiny/test-model"
     assert results["mean_tokens_per_second"] == 20.0
     assert results["moe_layers_patched"] == 27
-    assert results["acceptance_rate"] == pytest.approx(1.5 / 4)  # mean(2, 1) / num_speculative_tokens
+    assert results["acceptance_rate"] == pytest.approx(
+        1.5 / 4
+    )  # mean(2, 1) / num_speculative_tokens
     assert results["token_match"] == {}
     assert (tmp_path / "test-run-generated-tokens.json").exists()
 
@@ -1446,7 +1455,9 @@ def main(argv: list[str] | None = None) -> None:
     print(f"wrote {tokens_path}")
 
     comparison = (
-        compare_generated_tokens(generated_tokens, load_generated_tokens(args.compare_generated_tokens))
+        compare_generated_tokens(
+            generated_tokens, load_generated_tokens(args.compare_generated_tokens)
+        )
         if args.compare_generated_tokens is not None
         else {}
     )
