@@ -180,7 +180,7 @@ def test_slice_cache_extracts_one_request_without_mutating_the_original() -> Non
     sliced = slice_cache(cache, index=1)
 
     assert sliced.get_seq_length() == 3
-    assert sliced.batch_size == 1
+    assert sliced.layers[0].keys.shape[0] == 1
     torch.testing.assert_close(sliced.layers[0].keys[0], cache.layers[0].keys[1])
     torch.testing.assert_close(cache.layers[0].keys[0], original_row_0)
 
@@ -202,7 +202,7 @@ def test_pad_and_batch_caches_left_pads_to_a_common_length_and_masks_correctly()
     batched, attention_mask = pad_and_batch_caches([short, long_], pad_to=5)
 
     assert batched.get_seq_length() == 5
-    assert batched.batch_size == 2
+    assert batched.layers[0].keys.shape[0] == 2
     assert attention_mask.tolist() == [[0, 0, 0, 1, 1], [1, 1, 1, 1, 1]]
     torch.testing.assert_close(batched.layers[0].keys[0, :, -2:, :], short.layers[0].keys[0])
     torch.testing.assert_close(batched.layers[0].keys[1], long_.layers[0].keys[0])
