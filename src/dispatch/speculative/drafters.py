@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Protocol
 
 import torch
+from transformers import Cache, PreTrainedModel
 
 
 class Drafter(Protocol):
@@ -56,3 +57,39 @@ class PromptLookupDrafter:
 
     def on_accepted(self, accepted_len: int, rejected_len: int) -> None:
         pass
+
+
+class DraftModelDrafter:
+    """Wraps a loaded causal LM and its own KV cache, greedily decoding up
+    to num_tokens candidates per round. Mirrors harness.py's plain decode
+    loop's own catch-up pattern (feed the whole sequence when the cache is
+    empty, otherwise just the newest token) applied across repeated
+    propose() calls: the drafter's cache always lags the true sequence by
+    exactly one token (the target's own most recent bonus/correction
+    token, which the drafter hasn't seen yet) -- the first forward call of
+    each round after the first both catches that token up and produces
+    this round's first candidate."""
+
+    def __init__(self, model: PreTrainedModel) -> None:
+        self.model = model
+        self.past_key_values: Cache | None = None
+
+    def propose(self, token_ids: torch.Tensor, num_tokens: int) -> torch.Tensor:
+        if num_tokens <= 0:
+            return token_ids.new_empty((1, 0))
+        next_input = token_ids if self.past_key_values is None else token_ids[:, -1:]
+        proposed: list[torch.Tensor] = []
+        with torch.no_grad():
+            for _ in range(num_tokens):
+                outputs = self.model(
+                    input_ids=next_input, past_key_values=self.past_key_values, use_cache=True
+                )
+                self.past_key_values = outputs.past_key_values
+                next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+                proposed.append(next_token)
+                next_input = next_token
+        return torch.cat(proposed, dim=1)
+
+    def on_accepted(self, accepted_len: int, rejected_len: int) -> None:
+        if self.past_key_values is not None:
+            self.past_key_values.crop(rejected_len)
