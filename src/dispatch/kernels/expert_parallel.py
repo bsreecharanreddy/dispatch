@@ -65,7 +65,16 @@ def local_expert_contribution(  # routing inputs plus a pluggable GEMM and tile 
     # 64-expert model: local_expert_ids can reach higher than whatever this
     # particular batch's topk_idx happens to touch), so sizing on topk_idx
     # alone left local_index_of[local_expert_ids] indexing out of bounds.
-    index_span = max(int(topk_idx.max().item()), int(local_expert_ids.max().item())) + 1
+    # topk_idx can also be entirely empty -- confirmed live 2026-09-17 with
+    # 4-way EP (finer sharding than Phase 3's 2-way) on short prompts, where
+    # a rank can receive zero tokens for any of its local experts at all --
+    # and .max() on an empty tensor raises, so that case sizes off
+    # local_expert_ids alone.
+    index_span = (
+        int(local_expert_ids.max().item()) + 1
+        if topk_idx.numel() == 0
+        else max(int(topk_idx.max().item()), int(local_expert_ids.max().item())) + 1
+    )
     local_index_of = torch.zeros(index_span, dtype=torch.int64, device=topk_idx.device)
     local_index_of[local_expert_ids] = torch.arange(
         local_expert_ids.numel(), device=topk_idx.device

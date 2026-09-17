@@ -96,6 +96,30 @@ def test_local_expert_contribution_handles_batch_missing_the_highest_local_exper
     assert torch.equal(actual, torch.zeros_like(actual))
 
 
+def test_local_expert_contribution_handles_a_batch_with_no_tokens_for_this_rank_at_all() -> None:
+    """Regression test for a real bug (found 2026-09-17 running Phase 4's
+    4-way EP on short prompts): with finer sharding than Phase 3's 2-way
+    EP, a rank can receive zero tokens for any of its local experts --
+    topk_idx.max() then raises on the empty tensor, unlike the earlier
+    "missing the highest local expert" case where topk_idx was still
+    non-empty."""
+    moe = ReferenceMoE(TOY_CONFIG)
+    weights = stack_expert_weights(moe.experts)
+    local_expert_ids = torch.tensor([2, 3])
+    local_weights = StackedExpertWeights(
+        gate=weights.gate[2:4], up=weights.up[2:4], down=weights.down[2:4]
+    )
+    x = torch.randn(0, TOY_CONFIG.hidden_size)
+    topk_idx = torch.zeros(0, 2, dtype=torch.int64)
+    topk_weight = torch.zeros(0, 2, dtype=torch.float32)
+
+    actual = local_expert_contribution(
+        x, topk_idx, topk_weight, local_weights, torch_grouped_matmul, local_expert_ids
+    )
+
+    assert actual.shape == (0, TOY_CONFIG.hidden_size)
+
+
 @pytest.mark.gpu
 def test_local_expert_contribution_matches_cpu_when_inputs_are_on_cuda() -> None:
     """Regression test for a real bug (found 2026-09-16 while wiring Task 4's
