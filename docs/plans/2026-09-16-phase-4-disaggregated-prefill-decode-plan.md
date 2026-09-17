@@ -1494,3 +1494,24 @@ git commit -m "docs: record Phase 4 disaggregated prefill/decode outcome"
   `slice_cache`'s `keep_last` parameter (Task 1) is used identically by
   `run_prefill_batch` and `step_active_requests` (Task 3) to drop
   left-padding after every batched forward call, not just some of them.
+
+## Deviation found during Task 3's execution
+
+Tracing `DecodeWorker.step()`'s logic by hand before writing its
+implementation surfaced a real bug this plan's original sketch didn't
+have a check for: admission (waiting -> active) and decoding happen in
+the *same* `step()` call, so a request whose `max_new_tokens` is 1 is
+already complete from prefill's own first token alone -- calling
+`step_active_requests` on it anyway would still take one decode step and
+over-generate by one token. Fixed by adding `split_completed(active,
+now) -> (still_active, completed)` to `disaggregated.py`, called in
+`DecodeWorker.step()` (and, per the shared-helpers design, `colocated.py`'s
+`ColocatedWorker.step()` in Task 4) immediately after admission and
+before `step_active_requests`. Covered by a new regression test,
+`test_decode_worker_completes_immediately_when_admission_alone_hits_max_new_tokens`.
+This also forced `max_new_tokens` up from 1 to 2 or 3 in several of the
+plan's other sketched test cases, where the degenerate value would have
+made them stop exercising what they were meant to test (e.g.
+`test_decode_worker_batches_requests_with_different_cache_lengths` would
+never have reached `step_active_requests`'s padding logic at all with
+`max_new_tokens=1` on both requests).
