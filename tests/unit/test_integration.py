@@ -5,11 +5,19 @@ actual inference code, not against a paraphrase of it."""
 
 from __future__ import annotations
 
+import copy
+from typing import cast
+
 import pytest
 import torch
 
-from dispatch.kernels.integration import patch_moe_infer
+from dispatch.kernels.integration import patch_moe_infer, patch_moe_infer_quantized
 from dispatch.kernels.moe_forward import torch_grouped_matmul
+from dispatch.kernels.quantization import (
+    dequantize_int8,
+    quantize_per_channel_int8,
+    torch_grouped_matmul_dequant,
+)
 from dispatch.kernels.reference_moe import MoEConfig, ReferenceMoE
 
 TOY_CONFIG = MoEConfig(
@@ -96,3 +104,52 @@ def test_patch_rejects_experts_that_are_not_a_module_list() -> None:
 
     with pytest.raises(TypeError, match="ModuleList"):
         patch_moe_infer(Odd(), torch_grouped_matmul)
+
+
+def test_patch_quantized_counts_only_moe_layers() -> None:
+    torch.manual_seed(0)
+
+    assert patch_moe_infer_quantized(FakeModel(num_moe_layers=3), torch_grouped_matmul_dequant) == 3
+
+
+def test_patched_quantized_model_matches_weights_quantized_in_place() -> None:
+    """Proves patch_moe_infer_quantized's full wiring (quantize at patch
+    time, route through grouped_moe_routed_quantized) is mathematically
+    equivalent to independently replacing every expert Linear's weight
+    with its own quantize-then-dequantize round trip and running
+    DeepSeek's stock moe_infer -- an independent computation path, not a
+    call to any of the same helpers."""
+    torch.manual_seed(0)
+    model = FakeModel(num_moe_layers=3)
+    hidden_states = torch.randn(9, TOY_CONFIG.hidden_size)
+
+    expected_model = copy.deepcopy(model)
+    for layer in expected_model.moe_layers:
+        for expert in cast(torch.nn.ModuleList, layer.experts):
+            for name in ("gate_proj", "up_proj", "down_proj"):
+                linear = getattr(expert, name)
+                requantized = dequantize_int8(
+                    quantize_per_channel_int8(linear.weight.detach().unsqueeze(0))
+                ).squeeze(0)
+                linear.weight = torch.nn.Parameter(requantized, requires_grad=False)
+    with torch.no_grad():
+        expected = expected_model(hidden_states)
+
+    patch_moe_infer_quantized(model, torch_grouped_matmul_dequant)
+    with torch.no_grad():
+        actual = model(hidden_states)
+
+    torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+def test_patch_quantized_rejects_experts_that_are_not_a_module_list() -> None:
+    class Odd(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.experts = torch.nn.Linear(2, 2)
+
+        def moe_infer(self) -> None:
+            raise NotImplementedError
+
+    with pytest.raises(TypeError, match="ModuleList"):
+        patch_moe_infer_quantized(Odd(), torch_grouped_matmul_dequant)
