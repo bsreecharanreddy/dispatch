@@ -74,6 +74,8 @@ def patch_moe_infer_quantized(
     for module, experts in _iter_validated_moe_layers(model):
         quantized_weights = quantize_stacked_weights(stack_expert_weights(experts))
         _free_expert_weights(experts)
+        # An instance attribute shadowing the remote-code method; nn.Module's
+        # __setattr__ stub only admits Tensor | Module values.
         module.moe_infer = _grouped_moe_infer_quantized(  # type: ignore[assignment]
             quantized_weights, matmul, block_m
         )

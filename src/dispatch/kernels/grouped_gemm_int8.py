@@ -146,9 +146,10 @@ def grouped_matmul_int8(
     block_n: int = DEFAULT_BLOCK_N,
     block_k: int = DEFAULT_BLOCK_K,
 ) -> torch.Tensor:
-    """One CTA per (m_tile, n_tile), dequantizing qweight's int8 tile
-    against its per-output-channel scale before accumulating -- the int8
-    analog of grouped_gemm.grouped_matmul."""
+    """One CTA per (m_tile, n_tile), accumulating qweight's int8 tile at
+    native tensor-core precision and applying its per-output-channel
+    scale once after the K-loop -- the int8 analog of
+    grouped_gemm.grouped_matmul."""
     out = _validated_quantized_output(x, qweight, schedule)
     if schedule.num_tiles == 0:
         return out
