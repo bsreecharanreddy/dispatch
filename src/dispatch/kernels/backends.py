@@ -5,6 +5,7 @@ importable where triton isn't installed."""
 from __future__ import annotations
 
 from dispatch.kernels.moe_forward import GroupedMatmul, torch_grouped_matmul
+from dispatch.kernels.quantization import QuantizedGroupedMatmul
 
 BACKENDS = ("torch", "naive", "persistent")
 
@@ -19,3 +20,9 @@ def resolve_backend(name: str) -> GroupedMatmul:
     return (
         grouped_gemm.grouped_matmul if name == "naive" else grouped_gemm.grouped_matmul_persistent
     )
+
+
+def resolve_quantized_backend() -> QuantizedGroupedMatmul:
+    from dispatch.kernels import grouped_gemm_int8  # noqa: PLC0415 -- triton is Linux-only
+
+    return grouped_gemm_int8.grouped_matmul_int8

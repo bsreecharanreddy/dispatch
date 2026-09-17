@@ -9,7 +9,7 @@ import types
 import pytest
 
 import dispatch.kernels
-from dispatch.kernels.backends import resolve_backend
+from dispatch.kernels.backends import resolve_backend, resolve_quantized_backend
 from dispatch.kernels.moe_forward import torch_grouped_matmul
 
 
@@ -31,3 +31,12 @@ def test_triton_backend_names_map_to_their_kernels(monkeypatch: pytest.MonkeyPat
 def test_unknown_backend_raises() -> None:
     with pytest.raises(ValueError, match="unknown backend"):
         resolve_backend("cutlass")
+
+
+def test_quantized_backend_maps_to_grouped_matmul_int8(monkeypatch: pytest.MonkeyPatch) -> None:
+    stand_in = types.ModuleType("dispatch.kernels.grouped_gemm_int8")
+    stand_in.grouped_matmul_int8 = object()  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "dispatch.kernels.grouped_gemm_int8", stand_in)
+    monkeypatch.setattr(dispatch.kernels, "grouped_gemm_int8", stand_in, raising=False)
+
+    assert resolve_quantized_backend() is stand_in.grouped_matmul_int8
