@@ -83,6 +83,63 @@ cost across both paid sessions: **$0.65** ($0.06 kernel correctness +
 $0.59 the measured run). Full account:
 `docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
 
+**Phase 2 (vLLM benchmark contribution) is complete, 2026-09-15.**
+Neither vLLM's nor SGLang's official MoE benchmark modeled skewed (zipf)
+expert load; upstreamed an opt-in `--expert-load-distribution` flag to
+vLLM's `benchmarks/kernels/benchmark_moe.py`. Measured on one rented RTX
+3090: `--tune` under zipf vs. uniform routing picks a **different
+winning Triton config at 4 of 5 tested batch sizes**. Open PR:
+[vllm-project/vllm#57100](https://github.com/vllm-project/vllm/pull/57100),
+awaiting maintainer review. Cost: **$0.77**. This phase landed no code
+in `dispatch` itself, only docs — its actual contribution is the
+upstreamed PR. Full account:
+`docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
+
+**Phase 3 (multi-GPU expert-parallel serving) is complete, 2026-09-16**,
+merged via PR #3 alongside Phase 2's docs. Real 2x H200 SXM EP over
+DeepSeek's own DeepEP (V1 `Buffer`, after V2's `ElasticBuffer` proved
+unavailable -- this rental had no GPU Fabric Manager). Correctness gate
+passed: perfect top-1 and mutual top-5 agreement vs. a single-GPU
+reference. **The measured answer disproved this project's own
+hypothesis**: Phase 1's naive-vs-persistent crossover doesn't reproduce
+under DeepEP's real per-expert token counts (naive wins at every tested
+count on H200; real per-local-expert counts, median 2 max ~20, sit
+below Phase 1's smallest tested point of 16). Cost: **$13.03** of a $25
+cap. Full account:
+`docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md`.
+
+**Phase 4 (disaggregated prefill/decode) is complete, 2026-09-17**,
+merged via PR #4. Continuous-batching prefill/decode workers across two
+real 4-GPU H100 SXM topologies (co-located 4-rank EP, disaggregated
+2+2-rank EP with a real cross-rank KV-cache handoff), both proven
+byte-exact against a single-GPU reference. Three real bugs found and
+fixed on real hardware, none caught by CPU-only tests. **The measured
+result was mixed, not clean**: disaggregated TTFT beats co-located at
+concurrency 4 (0.46s vs 1.12s) but loses at concurrency 8 (0.98s vs
+0.70s) -- most likely a kernel-warmup confound, reported as genuinely
+inconclusive. Cost: **$10.94** of a $40 cap. Full account:
+`docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+
+**Phase 5a (int8 weight-only quantization) is complete, 2026-09-17**, on
+its own branch (`phase-5a-quantization`), PR pending. Self-computed,
+per-output-channel int8 quantization extending the Triton kernel itself
+(not sourced from bitsandbytes/AWQ). Kernel-level correctness gate
+passed on a real L40 (15/15 int8, 25/25 bf16, both first-time on this
+hardware). A real bug found live during the GPU session -- quantizing
+without freeing the original bf16 expert weights, holding both copies
+at once and OOMing a 44GB L40 -- was found and fixed mid-session, and
+the final whole-branch review caught two more real precision defects
+(quantization arithmetic done in the input's own bf16/fp16 dtype
+instead of float32, and an fp16-specific scale-clamp cliff), both fixed
+before merge. Measured: int8 kernel **+70.9%** over stock (a throughput
+tie with the bf16 naive kernel it's built on, as expected -- weight-only
+quantization saves memory, not FLOPs), **49.89%** expert-weight memory
+reduction, perfect model-level top-1/mutual-top-k agreement at every
+tested position. Cost: **$1.95** of a $5 cap, including two RunPod
+Community Cloud pods that hit a real host-level GPU passthrough bug
+before a Secure Cloud pod worked. Full account:
+`docs/findings/2026-09-17-phase-5a-quantization-run.md`.
+
 ## One governing principle
 
 **Correctness before speed.** A kernel is not "fast" until it has been

@@ -12,6 +12,63 @@ deletes its own evidence is not a retraction.
 No phase shipped yet (`v0.1.0` is still the scaffold version; a tag lands
 once a phase's exit criteria are actually met).
 
+- **Phase 5a (int8 weight-only quantization) complete**, 2026-09-17
+  (`docs/plans/2026-09-16-phase-5a-quantization-plan.md`). Self-computed,
+  per-output-channel int8 quantization extending the Triton kernel
+  itself (not sourced from bitsandbytes/AWQ) — `make check` green
+  throughout (123 tests). Kernel-level correctness gate passed on a real
+  L40 (15/15 int8, 25/25 bf16). Measured on the real
+  `deepseek-ai/deepseek-moe-16b-base` model: int8 kernel **+70.9%** over
+  stock (a throughput tie with the bf16 naive kernel it's built on,
+  expected since weight-only quantization saves memory bandwidth, not
+  FLOPs), **49.89%** expert-weight memory reduction, perfect model-level
+  top-1/mutual-top-k agreement at every tested position. Two real bugs
+  found on real hardware: quantizing without freeing the original bf16
+  expert weights (holding both copies at once, OOMing a 44GB L40; found
+  live during the rental) and quantization arithmetic computed in the
+  weight's own bf16/fp16 dtype instead of float32 (widened round-trip
+  error, and an fp16-specific scale-clamp cliff; found by the final
+  whole-branch review), both fixed before merge. Cost: **$1.95** of a $5
+  cap, including two RunPod Community Cloud pods that hit a real
+  host-level GPU passthrough bug. Full account:
+  `docs/findings/2026-09-17-phase-5a-quantization-run.md`.
+- **Phase 4 (disaggregated prefill/decode) complete**, 2026-09-17
+  (`docs/plans/2026-09-16-phase-4-disaggregated-prefill-decode-plan.md`).
+  Continuous-batching prefill/decode workers across two real 4-GPU H100
+  SXM topologies (co-located 4-rank EP, disaggregated 2+2-rank EP with a
+  real cross-rank KV-cache handoff), both byte-exact against a
+  single-GPU reference — `make check` green throughout (102 tests).
+  Three real bugs found and fixed on real hardware, none caught by
+  CPU-only tests. Measured result was mixed, not clean: disaggregated
+  TTFT beats co-located at concurrency 4 (0.46s vs 1.12s) but loses at
+  concurrency 8 (0.98s vs 0.70s) — most likely a kernel-warmup confound,
+  reported as genuinely inconclusive. Cost: **$10.94** of a $40 cap.
+  Full account:
+  `docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+- **Phase 3 (multi-GPU expert-parallel serving) complete**, 2026-09-16
+  (`docs/plans/2026-09-15-phase-3-multi-gpu-expert-parallel-serving-plan.md`).
+  Real 2x H200 SXM expert-parallel serving over DeepSeek's own DeepEP
+  (V1 `Buffer`, after V2's `ElasticBuffer` proved unavailable on this
+  rental's Fabric-Manager-less hardware) — `make check` green
+  throughout. Correctness gate passed: perfect top-1 and mutual top-5
+  agreement vs. a single-GPU reference. The measured run disproved this
+  project's own hypothesis: Phase 1's naive-vs-persistent crossover
+  doesn't reproduce under DeepEP's real per-expert token counts (naive
+  wins at every tested count on H200; real per-local-expert counts,
+  median 2 max ~20, sit below Phase 1's smallest tested point of 16).
+  Cost: **$13.03** of a $25 cap. Full account:
+  `docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md`.
+- **Phase 2 (vLLM benchmark contribution) complete**, 2026-09-15
+  (`docs/plans/2026-09-15-phase-2-vllm-benchmark-contribution-plan.md`).
+  Neither vLLM's nor SGLang's official MoE benchmark modeled skewed
+  (zipf) expert load; upstreamed an opt-in `--expert-load-distribution`
+  flag to vLLM's `benchmarks/kernels/benchmark_moe.py`. Measured on one
+  rented RTX 3090: `--tune` under zipf vs. uniform routing picks a
+  different winning Triton config at 4 of 5 tested batch sizes. Open
+  PR: [vllm-project/vllm#57100](https://github.com/vllm-project/vllm/pull/57100).
+  Cost: **$0.77**. This phase landed no code in `dispatch` itself, only
+  docs — its actual contribution is the upstreamed PR. Full account:
+  `docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
 - **Phase 1 (custom Triton grouped-GEMM kernel) complete**, 2026-09-15
   (`docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`). Built and
   tested: a CPU-only MoE reference and grouped-GEMM contract, a naive and
