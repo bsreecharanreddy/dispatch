@@ -284,9 +284,68 @@ Full account, including the exact bugs, fixes, and every number:
 **Total Phase 3 GPU cost: $13.03** of the $25 cap, 2x H200 SXM, 85
 minutes.
 
+## Phase 4 progress
+
+Design: `docs/design/2026-09-16-phase-4-disaggregated-prefill-decode.md`.
+Plan: `docs/plans/2026-09-16-phase-4-disaggregated-prefill-decode-plan.md`.
+Branch `phase-4-disaggregated-prefill-decode`.
+
+- [x] Task 1: KV-cache slice/pad-batch helpers (`src/dispatch/serving/kv_cache.py`),
+      grounded in transformers v5's real `DynamicCache` API (confirmed live
+      against transformers' own migration guide and source -- `to_legacy_cache`
+      etc. were removed in v5)
+- [x] Task 2: Cross-rank KV-cache handoff (`src/dispatch/serving/handoff.py`),
+      proven over CPU-only `gloo` before any GPU
+- [x] Task 3: Continuous-batching prefill/decode workers
+      (`src/dispatch/serving/disaggregated.py`) -- found and fixed a real
+      scheduler bug (admission and decode sharing one `step()` call could
+      over-generate by one token) before ever running on GPU
+- [x] Task 4: Co-located baseline worker (`src/dispatch/serving/colocated.py`)
+- [x] Task 5: 4x H100 SXM rental, real EP wiring, correctness gate, concurrency measurement
+- [x] Task 6: Findings doc and this update
+
+**Phase 4 is complete.** All 6 tasks done, `make check` green throughout
+(102 tests total, including the new `test_kv_cache.py`/`test_handoff.py`/
+`test_disaggregated.py`/`test_colocated.py`).
+
+**Three real bugs found and fixed on real hardware**, none caught by
+CPU-only tests: DeepSeek's remote-code model returns the legacy
+tuple-of-tensors cache format (not `DynamicCache`), handled at the
+pod-local script boundary; `local_expert_contribution` (Phase 3 code)
+crashed when a rank received zero tokens for any local expert at all --
+a case 4-way EP's finer sharding made reachable where Phase 3's 2-way EP
+never hit it; and `handoff.py`/`kv_cache.py` had two device-placement
+bugs (NCCL needs CUDA tensors; `gloo`-only tests never caught it) found
+by re-reading the code before running it, not by a live crash. All three
+fixed with regression tests.
+
+**Correctness gate passed for both topologies**: exact greedy-token-sequence
+match (the strict bar this scheduler's token-only interface actually
+admits) against a single-GPU reference, all 3 prompts, for both a
+co-located 4-rank EP pool and a disaggregated 2+2-rank EP pool connected
+by a real cross-rank KV-cache handoff.
+
+**The measured answer to Phase 4's thesis** (does disaggregation relieve
+prefill/decode contention, holding GPU count fixed at 4): mixed, not a
+clean result. Disaggregated TTFT beats co-located's at concurrency 4
+(0.46s vs 1.12s mean) but loses at concurrency 8 (0.98s vs 0.70s) --
+most likely a kernel-warmup confound between independent process
+launches rather than a real topology effect (co-located's own wall time
+*dropped* going from concurrency 4 to 8, the signature of warmup, not
+contention). Reported as genuinely inconclusive rather than forced into
+either direction; a warmed-up measurement protocol is the identified
+follow-up, not attempted this session per the standing cost-discipline
+instruction once both correctness gates had passed. Full account:
+`docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+
+**Total Phase 4 GPU cost: $10.94** of the $40 cap, 4x H100 SXM, 47
+minutes.
+
 ## Next step
 
-Phase 3's PR (#3) is ready to merge -- `make check` green, correctness
-gate passed, findings recorded. Phase 2's PR is still open and awaiting
+Phase 4 is complete and ready to push as a PR (`make check` green,
+correctness gates passed, findings recorded, cost well under cap).
+Phase 3's PR (#3) already merged. Phase 2's PR is still open and awaiting
 maintainer review; no further work planned on it beyond responding to
-review feedback. Phase 4 is not yet planned.
+review feedback. Phase 5 (quantization + speculative decoding) is not
+yet planned.

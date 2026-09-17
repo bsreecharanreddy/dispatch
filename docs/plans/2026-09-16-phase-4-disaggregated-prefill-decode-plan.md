@@ -135,7 +135,7 @@ docs/STATUS.md                                                          # Task 6
   Tasks 3-4 build their entire batching loop on these two functions and
   nothing else from this file.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_kv_cache.py`:
 
@@ -246,12 +246,12 @@ def test_slice_and_rebatch_round_trip_through_a_real_tiny_model() -> None:
     assert continued.logits.shape == (1, 1, continued.logits.shape[-1])
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/unit/test_kv_cache.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'dispatch.serving'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/dispatch/serving/__init__.py` (empty file).
 
@@ -332,23 +332,23 @@ def pad_and_batch_caches(
     return DynamicCache(ddp_cache_data=per_layer), attention_mask
 ```
 
-- [ ] **Step 4: Run to verify the fast tests pass**
+- [x] **Step 4: Run to verify the fast tests pass**
 
 Run: `uv run pytest tests/unit/test_kv_cache.py -v -m "not slow"`
 Expected: 5 pass (the `@pytest.mark.slow` real-model test is excluded).
 
-- [ ] **Step 5: Run the slow real-model test**
+- [x] **Step 5: Run the slow real-model test**
 
 Run: `uv run pytest tests/unit/test_kv_cache.py -v -m slow`
 Expected: PASS (downloads `hf-internal-testing/tiny-random-gpt2` on first
 run, network required, no GPU).
 
-- [ ] **Step 6: Lint and typecheck**
+- [x] **Step 6: Lint and typecheck**
 
 Run: `uv run ruff check src/dispatch/serving tests/unit/test_kv_cache.py && uv run ruff format --check src/dispatch/serving tests/unit/test_kv_cache.py && uv run mypy src tests`
 Expected: clean.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/dispatch/serving/__init__.py src/dispatch/serving/kv_cache.py tests/unit/test_kv_cache.py
@@ -373,7 +373,7 @@ git commit -m "feat: add KV-cache slice/pad-batch helpers for continuous batchin
   functions unchanged, with `backend="nccl"` instead of `"gloo"` and real
   ranks instead of a CPU 2-process test.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_handoff.py`:
 
@@ -455,12 +455,12 @@ def test_send_and_recv_kv_cache_round_trip_over_gloo(tmp_path: object) -> None:
     assert result["seq_len"] == SEQ_LEN
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/unit/test_handoff.py -v -m slow`
 Expected: FAIL with `ModuleNotFoundError: No module named 'dispatch.serving.handoff'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/dispatch/serving/handoff.py`:
 
@@ -511,19 +511,19 @@ def recv_kv_cache(  # noqa: PLR0913 -- the receiver can't infer shape/dtype from
     return DynamicCache(ddp_cache_data=per_layer)
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `uv run pytest tests/unit/test_handoff.py -v -m slow`
 Expected: PASS.
 
-- [ ] **Step 5: Lint and typecheck**
+- [x] **Step 5: Lint and typecheck**
 
 Run: `uv run ruff check src/dispatch/serving/handoff.py tests/unit/test_handoff.py && uv run ruff format --check src/dispatch/serving/handoff.py tests/unit/test_handoff.py && uv run mypy src tests`
 Expected: clean. (Add `"src/dispatch/serving/handoff.py" = ["PLR0913"]`
 to `pyproject.toml`'s `[tool.ruff.lint.per-file-ignores]` only if the
 inline `# noqa: PLR0913` above doesn't satisfy ruff.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/dispatch/serving/handoff.py tests/unit/test_handoff.py
@@ -557,7 +557,7 @@ git commit -m "feat: add cross-rank KV-cache handoff, proven over gloo"
   unchanged. Task 5 wires real closures matching `PrefillFn`/`DecodeFn`
   exactly; nothing in this file changes at that point.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_disaggregated.py`:
 
@@ -671,12 +671,22 @@ def test_decode_worker_batches_requests_with_different_cache_lengths() -> None:
     worker = DecodeWorker(_fake_decode_fn, batch_size=4)
     worker.admit(
         PrefillResult(
-            "short", _fake_cache(1, 2), first_token_id=1, ttft=0.1, max_new_tokens=1, eos_token_id=None
+            "short",
+            _fake_cache(1, 2),
+            first_token_id=1,
+            ttft=0.1,
+            max_new_tokens=1,
+            eos_token_id=None,
         )
     )
     worker.admit(
         PrefillResult(
-            "long", _fake_cache(1, 5), first_token_id=1, ttft=0.1, max_new_tokens=1, eos_token_id=None
+            "long",
+            _fake_cache(1, 5),
+            first_token_id=1,
+            ttft=0.1,
+            max_new_tokens=1,
+            eos_token_id=None,
         )
     )
 
@@ -712,12 +722,12 @@ def test_decode_worker_respects_batch_size_admitting_only_free_slots() -> None:
     assert [r.request_id for r in b_result] == ["b"]
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/unit/test_disaggregated.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'dispatch.serving.disaggregated'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/dispatch/serving/disaggregated.py`:
 
@@ -955,17 +965,17 @@ class DecodeWorker:
         return completed
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `uv run pytest tests/unit/test_disaggregated.py -v`
 Expected: all pass.
 
-- [ ] **Step 5: Lint and typecheck**
+- [x] **Step 5: Lint and typecheck**
 
 Run: `uv run ruff check src/dispatch/serving/disaggregated.py tests/unit/test_disaggregated.py && uv run ruff format --check src/dispatch/serving/disaggregated.py tests/unit/test_disaggregated.py && uv run mypy src tests`
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/dispatch/serving/disaggregated.py tests/unit/test_disaggregated.py
@@ -991,7 +1001,7 @@ git commit -m "feat: add continuous-batching prefill and decode workers"
   just with both roles talking to the same 4-rank EP pool instead of two
   separate 2-rank pools.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_colocated.py`:
 
@@ -1090,12 +1100,12 @@ def test_colocated_worker_respects_batch_size_across_prefill_and_decode() -> Non
     assert [r.request_id for r in b_done] == ["b"]
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/unit/test_colocated.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'dispatch.serving.colocated'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/dispatch/serving/colocated.py`:
 
@@ -1163,24 +1173,24 @@ class ColocatedWorker:
         return completed
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `uv run pytest tests/unit/test_colocated.py -v`
 Expected: all pass.
 
-- [ ] **Step 5: Lint and typecheck**
+- [x] **Step 5: Lint and typecheck**
 
 Run: `uv run ruff check src/dispatch/serving/colocated.py tests/unit/test_colocated.py && uv run ruff format --check src/dispatch/serving/colocated.py tests/unit/test_colocated.py && uv run mypy src tests`
 Expected: clean.
 
-- [ ] **Step 6: Run the full CPU-testable suite together**
+- [x] **Step 6: Run the full CPU-testable suite together**
 
 Run: `uv run pytest tests/unit -v -m "not gpu"`
 Expected: all pass, including Task 1-4's new tests. This is the
 "everything not requiring GPU/DeepEP is already green" checkpoint the
 Global Constraints require before Task 5's rental begins.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/dispatch/serving/colocated.py tests/unit/test_colocated.py
@@ -1207,7 +1217,7 @@ git commit -m "feat: add co-located prefill/decode baseline worker"
 spend (Global Constraints). This is a live session with the user, not
 something to run unattended -- get explicit go-ahead before renting.**
 
-- [ ] **Step 1: Write the runbook**
+- [x] **Step 1: Write the runbook**
 
 Create `docs/runbooks/phase-4-disaggregated-prefill-decode.md`:
 
@@ -1380,14 +1390,14 @@ at rental time for 4-GPU availability and pricing.
     ```
 ````
 
-- [ ] **Step 2: Get the user's explicit go-ahead, then execute the runbook**
+- [x] **Step 2: Get the user's explicit go-ahead, then execute the runbook**
 
 Confirm the budget cap and GPU choice with the user before the first
 `create` call -- this is a paid action, never taken unattended. Remind
 the user of the standing instruction to be surgical: prefer stopping
 early with a smaller, trustworthy result over spending toward the cap.
 
-- [ ] **Step 3: Commit the runbook, the pod-live load-driver script, and the cost record**
+- [x] **Step 3: Commit the runbook, the pod-live load-driver script, and the cost record**
 
 ```bash
 git add docs/runbooks/phase-4-disaggregated-prefill-decode.md docs/findings/2026-09-16-phase-4-disaggregated-prefill-decode-cost.md scripts/gpu/phase4_load_driver.py
@@ -1408,7 +1418,7 @@ than what was assumed.
 - Create: `docs/findings/2026-09-16-phase-4-disaggregated-prefill-decode-run.md`
 - Modify: `docs/STATUS.md`
 
-- [ ] **Step 1: Write the findings doc**
+- [x] **Step 1: Write the findings doc**
 
 Cover, in `docs/findings/2026-09-16-phase-4-disaggregated-prefill-decode-run.md`:
 whether real 4-GPU NVLink was confirmed; whether DeepEP V1 installed
@@ -1429,7 +1439,7 @@ before both concurrency levels completed, say so plainly and report
 exactly what was measured -- matching this project's practice of writing
 down a null or partial result rather than a flattering guess.
 
-- [ ] **Step 2: Update STATUS.md**
+- [x] **Step 2: Update STATUS.md**
 
 Add a "## Phase 4 progress" section following the Phase 0/1/2/3 pattern:
 plan link, hardware actually used, the correctness-gate result for both
@@ -1438,7 +1448,7 @@ against the $40 cap. Set "## Next step" to reflect what's actually next
 (Phase 5 planning, or follow-up on Phase 4 if something didn't land
 cleanly).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/findings/2026-09-16-phase-4-disaggregated-prefill-decode-run.md docs/STATUS.md
