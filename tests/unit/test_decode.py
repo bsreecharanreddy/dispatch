@@ -237,3 +237,23 @@ def test_speculative_generate_matches_plain_greedy_decode_on_a_real_tiny_model()
     )
 
     assert list(speculative_ids) == plain_ids
+
+
+def test_stops_exactly_at_eos_even_when_a_full_round_of_room_remains() -> None:
+    """A plain greedy decode stops the instant it emits eos_token_id,
+    never emitting anything after it -- even a single-token round's own
+    bonus token. Without the fix, a round that accepts an eos-valued
+    candidate would still tack on its bonus token before the eos check
+    fires, overshooting what plain greedy decoding would have produced."""
+    prompt = [3, 4, 5]
+    result = run_speculative_rounds(
+        _FakeIncrementModel(),  # type: ignore[arg-type]
+        _AlwaysCorrectDrafter(),
+        torch.tensor([prompt]),
+        num_speculative_tokens=1,
+        max_new_tokens=5,
+        eos_token_id=6,
+    )
+
+    assert list(result.generated_token_ids) == [6]
+    assert result.accepted_lengths == (1,)

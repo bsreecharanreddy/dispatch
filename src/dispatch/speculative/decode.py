@@ -89,8 +89,19 @@ def run_speculative_rounds(  # noqa: PLR0913 -- each of these is an independent,
                 bonus_token = target_predictions[accepted_len].view(1, 1)
                 emitted = torch.cat([emitted, bonus_token], dim=1)
 
-            token_ids = torch.cat([token_ids, emitted], dim=1)
             emitted_list = emitted[0].tolist()
+            if eos_token_id is not None and eos_token_id in emitted_list:
+                # Plain sequential greedy decoding stops the instant it
+                # emits eos_token_id, never emitting anything after it --
+                # so truncate this round's emission there too, even if an
+                # earlier-accepted candidate (not the bonus token) is what
+                # actually matched, and even if room would have allowed
+                # more.
+                eos_position = emitted_list.index(eos_token_id)
+                emitted = emitted[:, : eos_position + 1]
+                emitted_list = emitted_list[: eos_position + 1]
+
+            token_ids = torch.cat([token_ids, emitted], dim=1)
             for _ in emitted_list:
                 token_times.append(clock_fn())
             generated.extend(int(t) for t in emitted_list)
