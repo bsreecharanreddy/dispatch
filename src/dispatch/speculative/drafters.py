@@ -88,6 +88,15 @@ class DraftModelDrafter:
                 next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
                 proposed.append(next_token)
                 next_input = next_token
+            # on_accepted's crop(rejected_len) assumes every proposed
+            # candidate is cache-resident (matching the target's own
+            # crop formula in decode.py exactly) -- without this call the
+            # loop above would leave the very last candidate un-cached,
+            # silently evicting an accepted token on the next crop.
+            outputs = self.model(
+                input_ids=next_input, past_key_values=self.past_key_values, use_cache=True
+            )
+            self.past_key_values = outputs.past_key_values
         return torch.cat(proposed, dim=1)
 
     def on_accepted(self, accepted_len: int, rejected_len: int) -> None:

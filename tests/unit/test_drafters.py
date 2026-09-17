@@ -126,38 +126,43 @@ def test_first_propose_call_feeds_the_whole_prompt() -> None:
     proposed = drafter.propose(prompt, num_tokens=2)
 
     assert proposed.tolist() == [[6, 7]]
-    assert model.call_count == 2
+    assert model.call_count == 3
     assert drafter.past_key_values is not None
-    # Iteration 1 feeds the whole 3-token prompt (cache was empty);
-    # iteration 2 feeds only the 1 token iteration 1 just produced.
-    assert drafter.past_key_values.length == 3 + 1  # type: ignore[attr-defined]
+    # Iteration 1 feeds the whole 3-token prompt (cache was empty) and
+    # produces candidate 6; iteration 2 feeds candidate 6 and produces
+    # candidate 7; a final extra call feeds candidate 7 too, so the
+    # cache ends up holding the prompt plus BOTH candidates -- not
+    # just the first one -- matching on_accepted's crop-by-
+    # rejected_len formula, which assumes every proposed candidate is
+    # cache-resident.
+    assert drafter.past_key_values.length == 3 + 2  # type: ignore[attr-defined]
 
 
 def test_later_propose_call_feeds_only_the_newest_token() -> None:
     model = _FakeIncrementModel()
     drafter = DraftModelDrafter(model)  # type: ignore[arg-type]
-    drafter.propose(torch.tensor([[3, 4, 5]]), num_tokens=2)  # seeds the cache, length 3+1=4
+    drafter.propose(torch.tensor([[3, 4, 5]]), num_tokens=2)  # seeds the cache, length 3+2=5
 
     proposed = drafter.propose(torch.tensor([[3, 4, 5, 6, 7]]), num_tokens=2)
 
     assert proposed.tolist() == [[8, 9]]
     assert drafter.past_key_values is not None
-    # Cache already holds a real KV entry (length 4), so both iterations of
-    # this call feed exactly 1 new token each: 4 + 1 + 1 = 6.
-    assert drafter.past_key_values.length == 4 + 1 + 1  # type: ignore[attr-defined]
+    # This call feeds exactly 1 new (catch-up) token plus both of
+    # this round's 2 candidates: 5 + 1 + 2 = 8.
+    assert drafter.past_key_values.length == 5 + 1 + 2  # type: ignore[attr-defined]
 
 
 def test_on_accepted_crops_the_cache_by_the_rejected_length() -> None:
     model = _FakeIncrementModel()
     drafter = DraftModelDrafter(model)  # type: ignore[arg-type]
-    # Iteration 1 feeds the whole 3-token prompt; iterations 2-4 each feed
-    # 1 token: cache length = 3 + 1 + 1 + 1 = 6.
+    # Feeds the whole 3-token prompt plus all 4 proposed candidates:
+    # cache length = 3 + 4 = 7.
     drafter.propose(torch.tensor([[3, 4, 5]]), num_tokens=4)
 
     drafter.on_accepted(accepted_len=1, rejected_len=3)
 
     assert drafter.past_key_values is not None
-    assert drafter.past_key_values.length == 6 - 3  # type: ignore[attr-defined]
+    assert drafter.past_key_values.length == 7 - 3  # type: ignore[attr-defined]
 
 
 def test_on_accepted_before_any_propose_call_is_a_no_op() -> None:
@@ -172,3 +177,65 @@ def test_propose_with_non_positive_num_tokens_returns_empty_without_calling_the_
 
     assert proposed.shape == (1, 0)
     assert model.call_count == 0
+
+
+class _FakeTrackingCache:
+    """Like _FakeCache, but records the actual token values fed into it
+    across calls, so a test can assert which real tokens the cache holds
+    -- catching a bug where a crop removes the wrong tail even though the
+    resulting length happens to look right."""
+
+    def __init__(self, tokens: list[int]) -> None:
+        self.tokens = tokens
+
+    @property
+    def length(self) -> int:
+        return len(self.tokens)
+
+    def crop(self, tokens_to_remove: int) -> None:
+        del self.tokens[len(self.tokens) - tokens_to_remove :]
+
+
+class _FakeTrackingOutputs:
+    def __init__(self, logits: torch.Tensor, past_key_values: _FakeTrackingCache) -> None:
+        self.logits = logits
+        self.past_key_values = past_key_values
+
+
+class _FakeTrackingIncrementModel:
+    """Same +1-mod-vocab-size rule as _FakeIncrementModel, but its cache
+    tracks real fed token values instead of just a length."""
+
+    def __init__(self, vocab_size: int = 16) -> None:
+        self.vocab_size = vocab_size
+
+    def __call__(
+        self,
+        *,
+        input_ids: torch.Tensor,
+        past_key_values: _FakeTrackingCache | None,
+        use_cache: bool,
+    ) -> _FakeTrackingOutputs:
+        next_ids = (input_ids + 1) % self.vocab_size
+        logits = torch.nn.functional.one_hot(next_ids, self.vocab_size).float() * 10.0
+        prior_tokens = [] if past_key_values is None else list(past_key_values.tokens)
+        new_tokens = prior_tokens + input_ids[0].tolist()
+        return _FakeTrackingOutputs(logits, _FakeTrackingCache(new_tokens))
+
+
+def test_propose_then_on_accepted_leaves_the_cache_holding_exactly_the_accepted_tokens() -> None:
+    """Chains propose() -> on_accepted() and checks the cache's actual
+    token content (not just its length): after a round, the drafter's
+    cache must hold exactly the prompt plus every token the target
+    actually accepted -- never a rejected candidate, and never short a
+    genuinely-accepted one."""
+    model = _FakeTrackingIncrementModel()
+    drafter = DraftModelDrafter(model)  # type: ignore[arg-type]
+
+    proposed = drafter.propose(torch.tensor([[3, 4, 5]]), num_tokens=4)
+    assert proposed.tolist() == [[6, 7, 8, 9]]
+
+    drafter.on_accepted(accepted_len=1, rejected_len=3)
+
+    assert drafter.past_key_values is not None
+    assert drafter.past_key_values.tokens == [3, 4, 5, 6]  # type: ignore[attr-defined]
