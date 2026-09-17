@@ -411,10 +411,71 @@ the pod with `hf_transfer` not installed.
 three pods including both abandoned Community Cloud attempts. Full
 account: `docs/findings/2026-09-17-phase-5a-quantization-run.md`.
 
+## Phase 5b progress
+
+Design: `docs/design/2026-09-17-phase-5b-speculative-decoding.md`. Plan:
+`docs/plans/2026-09-17-phase-5b-speculative-decoding-plan.md`. Branch
+`phase-5b-speculative-decoding`.
+
+- [x] Task 1: `Drafter` protocol and `PromptLookupDrafter` (`src/dispatch/speculative/drafters.py`)
+- [x] Task 2: `DraftModelDrafter`
+- [x] Task 3: The shared speculative decode loop (`src/dispatch/speculative/decode.py`)
+- [x] Task 4: Exact generated-token reference capture/compare (`src/dispatch/speculative/reference.py`)
+- [x] Task 5: CLI (`scripts/run_speculative_bench.py`)
+- [x] Task 6: GPU rental runbook -- correctness gates, measured run, k-sweep
+- [x] Task 7: this update
+
+**Phase 5b is complete.** `make check` green throughout (156 tests, 2
+skipped, 2 deselected; lint and `mypy --strict` clean).
+
+**Both correctness gates passed** on a real NVIDIA L40 (RunPod Secure
+Cloud): draft-model and prompt-lookup each matched a same-session
+plain-greedy baseline byte-for-byte across all 4 prompts
+(`token_match: true` throughout), with all 27 MoE layers of the
+int8-quantized target patched in every one of the 11 results JSONs from
+this session (baseline, both gates, and all 8 k-sweep runs).
+
+**Measured run** (k=4, the default; same quantized target, bf16 draft
+model, single L40, 20 runs/config): baseline **21.90 tok/s** ($10.40 per
+1M tokens); draft-model (`deepseek-llm-7b-base`) **26.67 tok/s**
+(**+21.8%**, 91.9% acceptance, $8.54 per 1M tokens); prompt-lookup
+**38.73 tok/s** (**+76.9%**, 22.1% acceptance, $5.88 per 1M tokens).
+**Prompt-lookup wins on raw throughput despite accepting its own
+proposals over 4x less often than draft-model** -- draft-model's dense
+7B forward pass costs enough (TTFT roughly 2.5x baseline's) that a
+much-more-accurate paid drafter still loses the speed race to a free,
+much-less-accurate one, a real and non-obvious result reported as
+measured.
+
+**k-sweep** (k in {1, 2, 4, 8}, both drafters, run over the full
+4-prompt suite rather than just the repetition-heavy prompt alone --
+the CLI has no per-prompt selection flag, and adding one mid-session
+wasn't worth the risk for a pure cost optimization): draft-model ranges
+-18.6% to +47.3% vs. baseline across k, prompt-lookup +54.1% to +84.4%.
+Reading the generated-token files directly (not just the results JSONs)
+surfaced two open items worth a future look rather than smoothing over:
+the k=4 point measured twice in this session doesn't repeat exactly
+(26.67 vs. 29.15 tok/s for draft-model), and the k=1/k=2 sweep runs
+produce generated token sequences that diverge from the verified
+baseline trajectory (which collapses to repeating a single token for
+all 4 prompts by k=4) in a way the sweep's own design never checked for.
+Full account: `docs/findings/2026-09-17-phase-5b-speculative-decoding-run.md`.
+
+**Memory checkpoints** confirmed the design's own budget rationale
+live rather than by assumption: quantized target alone allocates
+16.75GB, target + bf16 draft model together 29.62GB -- both well within
+a single L40, no OOM at any point in the session.
+
+**Total Phase 5b GPU cost: $0.6833** of the $10 cap (6.83%), pod
+`2t6wh9l3okl3gj`, L40, $0.82/hr, 3000s -- one session covering both
+correctness gates, the three-way measured run, and the full 8-run
+k-sweep.
+
 ## Next step
 
-Phase 4 is merged (PR #4). Phase 5a is complete and ready to push as a
-PR. Phase 3's PR (#3) already merged. Phase 2's PR is still open and
-awaiting maintainer review; no further work planned on it beyond
-responding to review feedback. Phase 5b (speculative decoding) is not
-yet planned.
+**Phase 5b is complete.** Phase 4 is merged (PR #4). Phase 5a is
+complete and ready to push as a PR; Phase 5b (this update) is ready to
+push as its own PR per the one-branch-per-phase convention. Phase 3's PR
+(#3) already merged. Phase 2's PR is still open and awaiting maintainer
+review; no further work planned on it beyond responding to review
+feedback. **Phase 6 (final benchmark vs. vLLM/SGLang) is next.**
