@@ -32,4 +32,7 @@ def compare_generated_tokens(
             f"key mismatch: actual has {sorted(actual.keys())}, "
             f"reference has {sorted(reference.keys())}"
         )
-    return {key: actual[key] == reference[key] for key in reference}
+    # Normalize to tuple before comparing: Mapping/Sequence-typed inputs mean a
+    # caller could pass a list on one side and a tuple on the other, which
+    # Python's == would treat as unequal by container type alone, not content.
+    return {key: tuple(actual[key]) == tuple(reference[key]) for key in reference}
