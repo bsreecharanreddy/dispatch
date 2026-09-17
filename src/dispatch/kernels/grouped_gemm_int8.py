@@ -1,9 +1,14 @@
-"""Triton int8 weight-only grouped-GEMM kernel: dequantizes each weight
-tile against its per-output-channel scale inside the tile loop, then
-accumulates exactly like grouped_gemm.py's naive kernel. Activations (x)
-stay bf16/fp16 throughout -- only the weight side is ever int8. Held to
-assert_matches_reference against torch_grouped_matmul_dequant fed the same
-QuantizedTensor, per docs/design/2026-09-16-phase-5a-quantization.md
+"""Triton int8 weight-only grouped-GEMM kernel: accumulates the raw
+int8-times-activation dot product on native bf16/fp16 tensor cores --
+casting the int8 weight tile up to the activation's dtype, exact since
+int8's range is exactly representable in both -- then applies the
+per-output-channel scale once to the finished accumulator, exact since
+that scale is invariant across K. This keeps tl.dot's precision profile
+identical to grouped_gemm.py's bf16 naive kernel instead of falling back
+to the slower fp32/TF32 path a per-K-step dequant would force. Activations
+(x) stay bf16/fp16 throughout -- only the weight side is ever int8. Held
+to assert_matches_reference against torch_grouped_matmul_dequant fed the
+same QuantizedTensor, per docs/design/2026-09-16-phase-5a-quantization.md
 section 5.
 """
 
@@ -67,10 +72,16 @@ def _matmul_tile_int8(  # type: ignore[no-untyped-def]
         k_mask = (k_start + offs_k) < k
         x_tile = tl.load(x_ptrs, mask=row_mask & k_mask[None, :], other=0.0)
         w_tile = tl.load(w_ptrs, mask=k_mask[:, None] & col_mask_2d, other=0)
-        w_dequant = w_tile.to(tl.float32) * scale_tile[None, :]
-        acc += tl.dot(x_tile.to(tl.float32), w_dequant)
+        # int8 -> x_tile.dtype is exact, so casting the weight tile (rather
+        # than dequantizing per-K-step) keeps tl.dot on native bf16/fp16
+        # tensor cores instead of the ~2x-slower fp32/TF32 path -- the same
+        # precision profile as grouped_gemm.py's bf16 kernel. The
+        # per-output-channel scale is invariant across K, so it's exact and
+        # mathematically equivalent to hoist it outside the loop below.
+        acc += tl.dot(x_tile, w_tile.to(x_tile.dtype))
         x_ptrs += BLOCK_K * stride_xk
         w_ptrs += BLOCK_K * stride_wk
+    acc = acc * scale_tile[None, :]
 
     out_ptrs = out_ptr + (row_start + offs_m)[:, None] * stride_om + offs_n[None, :] * stride_on
     tl.store(out_ptrs, acc.to(out_ptr.dtype.element_ty), mask=row_mask & col_mask_2d)
@@ -173,6 +184,8 @@ def _validated_quantized_output(
         raise ValueError(f"expected int8 weight data, got {qweight.data.dtype}")
     if qweight.scale.dtype != torch.float32:
         raise ValueError(f"expected float32 scales, got {qweight.scale.dtype}")
+    if qweight.scale.shape != qweight.data.shape[:2]:
+        raise ValueError(f"scale shape {tuple(qweight.scale.shape)} does not match weight (E, N)")
     if x.shape[1] != qweight.data.shape[2]:
         raise ValueError(f"K mismatch: x has {x.shape[1]}, qweight has {qweight.data.shape[2]}")
     if schedule.block_m < MIN_BLOCK_M:

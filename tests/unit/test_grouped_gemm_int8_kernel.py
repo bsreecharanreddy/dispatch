@@ -10,6 +10,7 @@ import torch
 
 from dispatch.kernels.moe_forward import assert_matches_reference, stack_expert_weights
 from dispatch.kernels.quantization import (
+    QuantizedTensor,
     grouped_moe_routed_quantized,
     quantize_per_channel_int8,
     quantize_stacked_weights,
@@ -112,3 +113,14 @@ def test_int8_kernel_rejects_non_cuda_tensors() -> None:
 
     with pytest.raises(ValueError, match="CUDA"):
         grouped_gemm_int8.grouped_matmul_int8(x, qweight, schedule)
+
+
+def test_int8_kernel_rejects_a_scale_shape_that_does_not_match_weight_e_n() -> None:
+    x = torch.randn(4, 16, device="cuda", dtype=torch.float16)
+    weight = torch.randn(1, 16, 16, device="cuda", dtype=torch.float32)
+    qweight = quantize_per_channel_int8(weight)
+    mismatched = QuantizedTensor(data=qweight.data, scale=qweight.scale.unsqueeze(-1))
+    schedule = build_tile_schedule(torch.tensor([4], device="cuda"), block_m=16)
+
+    with pytest.raises(ValueError, match="scale shape"):
+        grouped_gemm_int8.grouped_matmul_int8(x, mismatched, schedule)
