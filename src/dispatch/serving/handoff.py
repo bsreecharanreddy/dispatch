@@ -16,7 +16,11 @@ from dispatch.serving.kv_cache import layer_kv
 
 
 def send_kv_cache(cache: DynamicCache, dst: int, group: dist.ProcessGroup) -> None:
-    seq_len = torch.tensor([cache.get_seq_length()], dtype=torch.int64)
+    # NCCL (unlike gloo) requires every send/recv tensor to be on the
+    # correct CUDA device -- matching the cache's own device keeps this
+    # gloo-safe too (the existing CPU test's caches default to "cpu").
+    device = layer_kv(cache.layers[0])[0].device
+    seq_len = torch.tensor([cache.get_seq_length()], dtype=torch.int64, device=device)
     dist.send(seq_len, dst=dst, group=group)
     for layer in cache.layers:
         key, value = layer_kv(layer)
@@ -24,7 +28,7 @@ def send_kv_cache(cache: DynamicCache, dst: int, group: dist.ProcessGroup) -> No
         dist.send(value.contiguous(), dst=dst, group=group)
 
 
-def recv_kv_cache(  # noqa: PLR0913 -- the receiver can't infer shape/dtype from the wire, they must be passed
+def recv_kv_cache(  # noqa: PLR0913 -- the receiver can't infer shape/dtype/device from the wire, they must be passed
     src: int,
     group: dist.ProcessGroup,
     *,
@@ -32,15 +36,16 @@ def recv_kv_cache(  # noqa: PLR0913 -- the receiver can't infer shape/dtype from
     num_heads: int,
     head_dim: int,
     dtype: torch.dtype,
+    device: torch.device | str = "cpu",
 ) -> DynamicCache:
-    seq_len_tensor = torch.zeros(1, dtype=torch.int64)
+    seq_len_tensor = torch.zeros(1, dtype=torch.int64, device=device)
     dist.recv(seq_len_tensor, src=src, group=group)
     seq_len = int(seq_len_tensor.item())
 
     per_layer = []
     for _ in range(num_layers):
-        key = torch.zeros(1, num_heads, seq_len, head_dim, dtype=dtype)
-        value = torch.zeros(1, num_heads, seq_len, head_dim, dtype=dtype)
+        key = torch.zeros(1, num_heads, seq_len, head_dim, dtype=dtype, device=device)
+        value = torch.zeros(1, num_heads, seq_len, head_dim, dtype=dtype, device=device)
         dist.recv(key, src=src, group=group)
         dist.recv(value, src=src, group=group)
         per_layer.append((key, value))
