@@ -13,7 +13,7 @@ import torch
 from transformers import DynamicCache
 
 from dispatch.benchmark.harness import load_model
-from dispatch.serving.kv_cache import _layer_kv, pad_and_batch_caches, slice_cache
+from dispatch.serving.kv_cache import layer_kv, pad_and_batch_caches, slice_cache
 
 NUM_LAYERS = 2
 NUM_HEADS = 2
@@ -34,11 +34,11 @@ def _make_cache(batch_size: int, seq_len: int, *, seed: int = 0) -> DynamicCache
 
 def test_slice_cache_extracts_one_request_without_mutating_the_original() -> None:
     cache = _make_cache(batch_size=2, seq_len=3)
-    cache_keys, _ = _layer_kv(cache.layers[0])
+    cache_keys, _ = layer_kv(cache.layers[0])
     original_row_0 = cache_keys[0].clone()
 
     sliced = slice_cache(cache, index=1)
-    sliced_keys, _ = _layer_kv(sliced.layers[0])
+    sliced_keys, _ = layer_kv(sliced.layers[0])
 
     assert sliced.get_seq_length() == 3
     assert sliced_keys.shape[0] == 1
@@ -48,11 +48,11 @@ def test_slice_cache_extracts_one_request_without_mutating_the_original() -> Non
 
 def test_slice_cache_with_keep_last_drops_left_padding() -> None:
     cache = _make_cache(batch_size=1, seq_len=5)
-    cache_keys, _ = _layer_kv(cache.layers[0])
+    cache_keys, _ = layer_kv(cache.layers[0])
     real_tail = cache_keys[:, :, -2:, :].clone()
 
     sliced = slice_cache(cache, index=0, keep_last=2)
-    sliced_keys, _ = _layer_kv(sliced.layers[0])
+    sliced_keys, _ = layer_kv(sliced.layers[0])
 
     assert sliced.get_seq_length() == 2
     torch.testing.assert_close(sliced_keys, real_tail)
@@ -63,9 +63,9 @@ def test_pad_and_batch_caches_left_pads_to_a_common_length_and_masks_correctly()
     long_ = _make_cache(batch_size=1, seq_len=5, seed=2)
 
     batched, attention_mask = pad_and_batch_caches([short, long_], pad_to=5)
-    batched_keys, _ = _layer_kv(batched.layers[0])
-    short_keys, _ = _layer_kv(short.layers[0])
-    long_keys, _ = _layer_kv(long_.layers[0])
+    batched_keys, _ = layer_kv(batched.layers[0])
+    short_keys, _ = layer_kv(short.layers[0])
+    long_keys, _ = layer_kv(long_.layers[0])
 
     assert batched.get_seq_length() == 5
     assert batched_keys.shape[0] == 2

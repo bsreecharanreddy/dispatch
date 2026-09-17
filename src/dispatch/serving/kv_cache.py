@@ -27,7 +27,7 @@ from transformers.cache_utils import CacheLayerMixin
 # loudly here instead of silently returning wrong tensors.
 
 
-def _layer_kv(layer: object) -> tuple[torch.Tensor, torch.Tensor]:
+def layer_kv(layer: object) -> tuple[torch.Tensor, torch.Tensor]:
     assert isinstance(layer, CacheLayerMixin), f"expected an attention layer, got {type(layer)}"
     assert layer.keys is not None and layer.values is not None, "expected an initialized layer"
     return layer.keys, layer.values
@@ -44,7 +44,7 @@ def slice_cache(cache: DynamicCache, index: int, *, keep_last: int | None = None
     """
     per_layer = []
     for raw_layer in cache.layers:
-        layer_keys, layer_values = _layer_kv(raw_layer)
+        layer_keys, layer_values = layer_kv(raw_layer)
         key = layer_keys[index : index + 1]
         value = layer_values[index : index + 1]
         if keep_last is not None:
@@ -75,7 +75,7 @@ def pad_and_batch_caches(
         attention_mask[row, pad_to - seq_len :] = 1
         pad_len = pad_to - seq_len
         for layer_idx, raw_layer in enumerate(cache.layers):
-            key, value = _layer_kv(raw_layer)
+            key, value = layer_kv(raw_layer)
             if pad_len > 0:
                 pad_shape = (1, key.shape[1], pad_len, key.shape[3])
                 key = torch.cat([torch.zeros(pad_shape, dtype=key.dtype), key], dim=2)
