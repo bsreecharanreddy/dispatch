@@ -22,14 +22,15 @@ result was a null or a mixed one, it's reported that way.
 
 ---
 
-> **Status:** Phases 0-4 merged to `main` (PRs
-> [#1](https://github.com/bsreecharanreddy/dispatch/pull/1),
-> [#2](https://github.com/bsreecharanreddy/dispatch/pull/2),
-> [#3](https://github.com/bsreecharanreddy/dispatch/pull/3),
-> [#4](https://github.com/bsreecharanreddy/dispatch/pull/4)), plus an
-> upstreamed vLLM benchmark contribution (Phase 2, no dispatch-repo PR of
-> its own — see below). **Phase 5a (int8 weight-only quantization) is
-> complete** on its own branch, PR pending. Full task-by-task record:
+> **Status:** Phases 0-4 merged to `main` across four PRs
+> ([#1](https://github.com/bsreecharanreddy/dispatch/pull/1) Phase 0,
+> [#2](https://github.com/bsreecharanreddy/dispatch/pull/2) Phase 1,
+> [#3](https://github.com/bsreecharanreddy/dispatch/pull/3) Phases 2-3,
+> [#4](https://github.com/bsreecharanreddy/dispatch/pull/4) Phase 4) —
+> Phase 2 landed as docs only, its actual contribution being the
+> upstreamed vLLM PR below, not a dispatch-repo code change. **Phase 5a
+> (int8 weight-only quantization) is complete** on its own branch, PR
+> pending. Full task-by-task record:
 > [`docs/STATUS.md`](docs/STATUS.md). Design and phasing:
 > [`docs/design/2026-09-14-dispatch-system-design.md`](docs/design/2026-09-14-dispatch-system-design.md).
 
@@ -46,8 +47,8 @@ the answer was a null or mixed result.
 serving path, an upstreamed open-source benchmark contribution, every
 rented-GPU session, and the write-ups of what broke along the way.
 
-**Measured across six rented-GPU sessions, $27.69 total, all under their
-stated caps:** a custom Triton kernel **~65-73% faster** than DeepSeek's own
+**Measured across seven rented-GPU sessions (six phases), $27.69 total,
+all under their stated caps:** a custom Triton kernel **~65-73% faster** than DeepSeek's own
 stock MoE forward pass at perfect logit agreement (Phase 1); an opt-in
 skewed-load benchmark flag upstreamed to vLLM, changing which kernel config
 its own tuner picks at 4 of 5 tested batch sizes (Phase 2); a real 2-GPU

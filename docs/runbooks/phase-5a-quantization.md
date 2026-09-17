@@ -128,6 +128,7 @@ a real bug found and fixed mid-session:
        total_int8 += quantized_stacked_weights_nbytes(quantize_stacked_weights(weights))
        layers += 1
    print(json.dumps({
+       "model": "deepseek-ai/deepseek-moe-16b-base", "dtype": "bfloat16", "device": "cuda",
        "layers": layers, "bf16_bytes": total_bf16, "int8_bytes": total_int8,
        "reduction_pct": round(100 * (1 - total_int8 / total_bf16), 2),
    }, indent=2))

@@ -36,8 +36,44 @@ On the working Secure Cloud L40 (driver 580.178.04, CUDA 13.0):
 - `pytest -m gpu tests/unit/test_grouped_gemm_kernel.py`: **25/25
   passed** -- the existing bf16 naive/persistent kernels, re-verified on
   this card.
-- `pytest -m "not gpu"` (full CPU suite): **118 passed** (later 119 after
-  the fix below).
+- `pytest -m "not gpu"` (full CPU suite): **118 passed** (later 119, then
+  122, after the fixes below).
+
+**Not run this session, and worth saying plainly rather than leaving
+implicit:** the design doc's own testing table calls for a mutation
+check on the kernel (e.g. forcing every tile to read the wrong expert's
+scale) turning the suite red, the same bar Phase 1 met and recorded
+(`docs/STATUS.md`'s Phase 1 section). Phase 5a's GPU session ran out of
+scope before this was attempted -- the 15/15 gate proves the kernel
+matches its reference on real, varied per-channel-scale data, but it
+does not independently prove the suite is capable of catching a broken
+per-channel scale index the way Phase 1's explicit mutation run did.
+Flagged by the final whole-branch review; deferred to a future GPU
+session rather than invented after the fact.
+
+## A kernel-precision finding from Task 3's fix round, recorded here
+
+`grouped_matmul_int8`'s first implementation dequantized each int8
+weight tile to fp32 and cast the activation tile to fp32 on every
+K-iteration before calling `tl.dot` -- which silently drops `tl.dot`
+off the native bf16/fp16 tensor-core path onto the much slower fp32/TF32
+one. Caught by task review before this ever ran on real hardware: **a
+kernel comparison that timed this would have measured "quantization is
+slower," and the true cause would have been the dot's precision, not
+quantization itself.** The design doc named exactly this risk in
+advance ("if this proves harder than expected inside the tile loop,
+that is itself a reportable finding").
+
+Fixed by casting the int8 tile to the activation's own native dtype
+before `tl.dot` and hoisting the per-output-channel scale multiply to
+run once *after* the K-loop rather than once per iteration -- exact,
+because the scale is K-invariant, and strictly more accurate than the
+original (one rounding instead of `K / BLOCK_K` of them). No before/after
+timing was measured on real hardware for this specific change in
+isolation -- the fix landed before Task 6's rental, so the 20.72 tok/s
+measured for the quantized kernel already reflects the corrected,
+native-precision version; there is no "slow" data point to compare it
+against without deliberately re-introducing the bug.
 
 ## A real bug found mid-session, fixed before the measured run
 
@@ -81,6 +117,55 @@ authority for judgment calls mid-session:
 Re-run after the fix: one transient `CUDACachingAllocator` OOM warning
 (the allocator retrying, not failing) instead of a crash, and the run
 completed cleanly.
+
+## Two more real bugs, found by the final whole-branch review
+
+The final review (broader and more architectural than the per-task
+reviews above, dispatched after all seven tasks were otherwise
+complete) found two real precision defects in `quantize_per_channel_int8`
+that no per-task review or CPU test had caught, because the existing
+round-trip test only ran fp32 and the zero-channel tests only checked
+for NaN, never range utilization:
+
+1. **Quantization arithmetic ran in the weight's own dtype.** `absmax`,
+   `scale`, and the quotient were all computed in bf16/fp16 rather than
+   float32. Measured: bf16 widens round-trip error to up to **1.5x** the
+   ideal 0.5-quantization-step bound (bf16's 8-bit mantissa is the
+   cause). The measured run's own perfect model-level agreement shows
+   this was empirically tolerable at this model's real scale -- but
+   nothing in the suite would have noticed if it regressed further.
+2. **The all-zero-channel guard clamped every small channel, not just
+   zero ones.** For fp16 specifically, the guard floored `scale` at
+   `torch.finfo(torch.float16).tiny` (~6.1e-5). Any channel with
+   `absmax < 127 x 6.1e-5 ≈ 0.00775` got its scale clamped *upward*,
+   silently under-using the int8 range -- demonstrated on a channel with
+   absmax ~0.001: ideal scale ~7.9e-6, clamped to ~6.1e-5, cutting the
+   largest value's int8 code from 127 down to 16 (a 2.4% relative error
+   where <0.4% was achievable). bf16 was immune (its own `tiny` is
+   ~1.18e-38), which is why the measured run above was unaffected --
+   this is CLI-reachable today via `--dtype float16 --moe-kernel
+   quantized`.
+
+Fixed by computing `absmax`/`scale`/the quotient in float32 regardless
+of the weight's own dtype, and changing the zero-channel guard to set
+`scale = 1.0` only when `absmax == 0` exactly, rather than clamping
+toward a dtype-dependent floor. Added a round-trip test parametrized
+over float32/bfloat16/float16 (one bound that must now hold for all
+three) and a regression test proving a small-but-nonzero fp16 channel
+still uses the full int8 range. `make check` green (122 passed, 2
+skipped, 1 deselected). Commit `589834c`.
+
+**One caveat this doesn't resolve:** computing in float32 means peak
+GPU memory during `patch_moe_infer_quantized` is not actually reduced
+by quantizing -- `load_model` loads the full bf16 model, then each
+layer transiently doubles to a float32 copy for the quantization math
+before `_free_expert_weights` releases the bf16 original. The **49.89%**
+figure below is the *steady-state* expert-weight footprint after
+quantizing, not a claim about peak memory during the process that gets
+there; a genuinely lower-peak path would need to load pre-quantized
+weights directly rather than quantizing a fully-materialized bf16 model
+in place. Out of scope for this phase; worth naming for whoever picks
+up quantize-on-load next.
 
 ## Three-way measured run
 

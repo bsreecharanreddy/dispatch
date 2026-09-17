@@ -6,13 +6,16 @@ actual inference code, not against a paraphrase of it."""
 from __future__ import annotations
 
 import copy
+import gc
+import weakref
 from typing import cast
 
 import pytest
 import torch
 
+from dispatch.kernels import integration as integration_module
 from dispatch.kernels.integration import patch_moe_infer, patch_moe_infer_quantized
-from dispatch.kernels.moe_forward import torch_grouped_matmul
+from dispatch.kernels.moe_forward import stack_expert_weights, torch_grouped_matmul
 from dispatch.kernels.quantization import (
     dequantize_int8,
     quantize_per_channel_int8,
@@ -155,6 +158,32 @@ def test_patch_quantized_frees_the_original_bf16_expert_weights() -> None:
         for expert in cast(torch.nn.ModuleList, layer.experts):
             for name in ("gate_proj", "up_proj", "down_proj"):
                 assert getattr(expert, name).weight.numel() == 0
+
+
+def test_patch_quantized_actually_releases_the_shared_bf16_tensor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The previous test proves the *views* into stack_expert_weights'
+    shared bf16 tensor are dropped, but a view being replaced doesn't by
+    itself prove the tensor those views pointed at is actually collected
+    -- something else could still be holding it. Pin that directly with
+    a weakref to the tensor stack_expert_weights actually builds."""
+    torch.manual_seed(0)
+    model = FakeModel(num_moe_layers=1)
+    refs: list[weakref.ReferenceType[torch.Tensor]] = []
+
+    def spying_stack_expert_weights(experts: object) -> object:
+        weights = stack_expert_weights(experts)  # type: ignore[arg-type]
+        refs.extend(weakref.ref(tensor) for tensor in (weights.gate, weights.up, weights.down))
+        return weights
+
+    monkeypatch.setattr(integration_module, "stack_expert_weights", spying_stack_expert_weights)
+
+    patch_moe_infer_quantized(model, torch_grouped_matmul_dequant)
+    gc.collect()
+
+    assert refs, "spy never ran -- test is broken, not proving anything"
+    assert all(ref() is None for ref in refs)
 
 
 def test_patch_quantized_rejects_experts_that_are_not_a_module_list() -> None:

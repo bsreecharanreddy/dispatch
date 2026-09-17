@@ -8,6 +8,7 @@ from dispatch.kernels.moe_forward import GroupedMatmul, torch_grouped_matmul
 from dispatch.kernels.quantization import QuantizedGroupedMatmul
 
 BACKENDS = ("torch", "naive", "persistent")
+QUANTIZED_BACKEND = "quantized"
 
 
 def resolve_backend(name: str) -> GroupedMatmul:

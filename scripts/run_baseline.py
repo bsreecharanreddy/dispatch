@@ -23,7 +23,12 @@ from dispatch.benchmark.reference import (
     load_reference,
     save_reference,
 )
-from dispatch.kernels.backends import BACKENDS, resolve_backend, resolve_quantized_backend
+from dispatch.kernels.backends import (
+    BACKENDS,
+    QUANTIZED_BACKEND,
+    resolve_backend,
+    resolve_quantized_backend,
+)
 from dispatch.kernels.integration import patch_moe_infer, patch_moe_infer_quantized
 
 DEFAULT_PROMPTS = [
@@ -49,7 +54,7 @@ def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-faci
         model_name, device=device, dtype=dtype, trust_remote_code=trust_remote_code
     )
     moe_layers_patched = 0
-    if moe_kernel == "quantized":
+    if moe_kernel == QUANTIZED_BACKEND:
         moe_layers_patched = patch_moe_infer_quantized(model, resolve_quantized_backend())
     elif moe_kernel != "none":
         moe_layers_patched = patch_moe_infer(model, resolve_backend(moe_kernel))
@@ -80,7 +85,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--max-new-tokens", type=int, default=64)
     parser.add_argument("--output-dir", type=Path, default=Path("docs/findings"))
     parser.add_argument("--run-label", default=time.strftime("%Y-%m-%d-baseline"))
-    parser.add_argument("--moe-kernel", default="none", choices=["none", *BACKENDS, "quantized"])
+    parser.add_argument(
+        "--moe-kernel", default="none", choices=["none", *BACKENDS, QUANTIZED_BACKEND]
+    )
     parser.add_argument(
         "--compare-reference",
         type=Path,

@@ -3,6 +3,11 @@ persistent Triton -- on synthetic DeepSeekMoE-16B-shaped routed-expert work,
 and write every summary with its full config to docs/findings/. A backend
 that disagrees with the eager torch backend on the benchmark's own input is
 refused, not timed.
+
+The int8 quantized kernel (Phase 5a) has no backend here by design: its
+own correctness/throughput claims come from run_baseline.py's real-model
+--compare-reference gate instead, since a synthetic-weight micro-benchmark
+would need to fabricate a quantization to time in the first place.
 """
 
 from __future__ import annotations

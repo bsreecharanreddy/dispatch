@@ -1,4 +1,7 @@
 {
+  "model": "deepseek-ai/deepseek-moe-16b-base",
+  "dtype": "bfloat16",
+  "device": "cuda",
   "layers": 27,
   "bf16_bytes": 29896998912,
   "int8_bytes": 14982119424,
