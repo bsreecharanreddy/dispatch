@@ -56,6 +56,15 @@ max-complexity = 10
 # Expert-parallel sharding/dispatch functions carry routing inputs plus a
 # pluggable GEMM and tile size, same shape as moe_forward.py's own functions.
 "src/dispatch/kernels/expert_parallel.py" = ["PLR0913", "PLR0917"]
+# Phase 4's pod-live rank-orchestration scripts (torchrun-only, not
+# imported by anything else): the prefill/decode role branch inside one
+# function is what keeps every rank's collective calls in the same
+# deterministic order (see their own docstrings), so splitting it up
+# would risk the exact synchronization these scripts were debugged
+# against. Rank ids (0/1 prefill, 2/3 decode) are the real protocol, not
+# magic numbers to extract into constants.
+"scripts/gpu/phase4_correctness_gate.py" = ["PLR0915", "PLR2004"]
+"scripts/gpu/phase4_concurrency.py" = ["PLR0915", "PLR2004", "C901"]
 
 [tool.mypy]
 python_version = "3.12"

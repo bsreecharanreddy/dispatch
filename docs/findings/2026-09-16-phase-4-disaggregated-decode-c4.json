@@ -1,0 +1,7 @@
+{
+  "topology": "disaggregated",
+  "concurrency": 4,
+  "max_new_tokens": 8,
+  "total_wall_s": 4.255717797204852,
+  "decode_tokens_per_s": 6.579383627925317
+}

@@ -1,0 +1,10 @@
+{
+  "topology": "colocated",
+  "concurrency": 8,
+  "max_new_tokens": 8,
+  "total_wall_s": 2.974014701321721,
+  "mean_ttft_s": 0.6953176653478295,
+  "p50_ttft_s": 0.9301474057137966,
+  "p99_ttft_s": 1.289631819501519,
+  "decode_tokens_per_s": 18.829765695210686
+}
