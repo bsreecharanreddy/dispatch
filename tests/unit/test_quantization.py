@@ -6,7 +6,24 @@ from __future__ import annotations
 
 import torch
 
-from dispatch.kernels.quantization import dequantize_int8, quantize_per_channel_int8
+from dispatch.kernels.moe_forward import (
+    StackedExpertWeights,
+    grouped_moe_routed,
+    stack_expert_weights,
+    torch_grouped_matmul,
+)
+from dispatch.kernels.quantization import (
+    QuantizedStackedExpertWeights,
+    QuantizedTensor,
+    dequantize_int8,
+    grouped_moe_routed_quantized,
+    quantize_per_channel_int8,
+    quantize_stacked_weights,
+    quantized_stacked_weights_nbytes,
+    stacked_weights_nbytes,
+    torch_grouped_matmul_dequant,
+)
+from dispatch.kernels.reference_moe import MoEConfig, ReferenceMoE
 
 
 def test_quantize_dequantize_round_trip_is_within_one_quantization_step() -> None:
@@ -73,3 +90,85 @@ def test_scale_is_per_expert_per_output_channel() -> None:
 
     assert quantized.scale.shape == (2, 2)
     assert quantized.scale[0, 1] > quantized.scale[0, 0]
+
+
+TOY_CONFIG = MoEConfig(
+    hidden_size=8,
+    moe_intermediate_size=16,
+    n_routed_experts=4,
+    n_shared_experts=1,
+    num_experts_per_tok=2,
+)
+
+
+def test_grouped_moe_routed_quantized_matches_dequantized_weights_reference() -> None:
+    torch.manual_seed(0)
+    moe = ReferenceMoE(TOY_CONFIG)
+    hidden_states = torch.randn(7, TOY_CONFIG.hidden_size)
+    topk_idx, topk_weight = moe.route(hidden_states)
+    weights = stack_expert_weights(moe.experts)
+    quantized_weights = quantize_stacked_weights(weights)
+
+    dequantized = StackedExpertWeights(
+        gate=dequantize_int8(quantized_weights.gate),
+        up=dequantize_int8(quantized_weights.up),
+        down=dequantize_int8(quantized_weights.down),
+    )
+    expected = grouped_moe_routed(
+        hidden_states, topk_idx, topk_weight, dequantized, torch_grouped_matmul
+    )
+
+    actual = grouped_moe_routed_quantized(
+        hidden_states, topk_idx, topk_weight, quantized_weights, torch_grouped_matmul_dequant
+    )
+
+    torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+def test_quantize_stacked_weights_shapes() -> None:
+    torch.manual_seed(0)
+    moe = ReferenceMoE(TOY_CONFIG)
+    weights = stack_expert_weights(moe.experts)
+
+    quantized = quantize_stacked_weights(weights)
+
+    assert quantized.num_experts == 4
+    assert quantized.gate.data.shape == weights.gate.shape
+    assert quantized.down.data.shape == weights.down.shape
+
+
+def test_quantized_stacked_weights_are_smaller_than_bf16() -> None:
+    torch.manual_seed(0)
+    moe = ReferenceMoE(TOY_CONFIG)
+    weights = stack_expert_weights(moe.experts)
+    bf16_weights = StackedExpertWeights(
+        gate=weights.gate.to(torch.bfloat16),
+        up=weights.up.to(torch.bfloat16),
+        down=weights.down.to(torch.bfloat16),
+    )
+    quantized = quantize_stacked_weights(weights)
+
+    bf16_bytes = stacked_weights_nbytes(bf16_weights)
+    int8_bytes = quantized_stacked_weights_nbytes(quantized)
+
+    assert int8_bytes < bf16_bytes
+
+
+def test_stacked_weights_nbytes_counts_every_projection() -> None:
+    weights = StackedExpertWeights(
+        gate=torch.zeros(2, 3, 4, dtype=torch.bfloat16),
+        up=torch.zeros(2, 3, 4, dtype=torch.bfloat16),
+        down=torch.zeros(2, 4, 3, dtype=torch.bfloat16),
+    )
+
+    assert stacked_weights_nbytes(weights) == 3 * (2 * 3 * 4 * 2)
+
+
+def test_quantized_stacked_weights_nbytes_counts_data_and_scale() -> None:
+    tensor = QuantizedTensor(
+        data=torch.zeros(2, 3, 4, dtype=torch.int8), scale=torch.zeros(2, 3, dtype=torch.float32)
+    )
+    weights = QuantizedStackedExpertWeights(gate=tensor, up=tensor, down=tensor)
+
+    expected = 3 * (2 * 3 * 4 * 1 + 2 * 3 * 4)
+    assert quantized_stacked_weights_nbytes(weights) == expected
