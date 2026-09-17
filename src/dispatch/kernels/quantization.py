@@ -30,11 +30,23 @@ class QuantizedTensor:
 
 def quantize_per_channel_int8(weight: torch.Tensor) -> QuantizedTensor:
     """weight: (..., N, K). scale[..., n] = max(abs(weight[..., n, :])) / 127.
-    An all-zero channel's scale is clamped away from zero so dividing by it
-    is a no-op (result: 0) rather than a NaN-producing divide-by-zero."""
-    absmax = weight.detach().abs().amax(dim=-1)
-    scale = (absmax / INT8_MAX).clamp(min=torch.finfo(weight.dtype).tiny)
-    quantized = (weight.detach() / scale.unsqueeze(-1)).round().clamp(-INT8_MAX, INT8_MAX)
+    An all-zero channel's scale is set to 1.0 (any nonzero placeholder
+    works: dequantizing a channel that quantized to all-zero data just
+    multiplies 0 by it) rather than a NaN-producing divide-by-zero.
+
+    absmax, scale, and the quotient are all computed in float32
+    regardless of weight's own dtype. Doing this arithmetic directly in
+    bf16/fp16 measurably widens round-trip error (bf16's 8-bit mantissa
+    pushes the worst case to ~1.5x the ideal 0.5-quantization-step
+    bound), and for fp16 specifically, clamping the scale floor at
+    fp16's own `tiny()` (~6e-5) -- an earlier version of this guard --
+    silently clamped small-but-nonzero channels' scales *upward*,
+    throwing away several bits of int8 range for no reason tied to that
+    channel's actual magnitude. Computing in fp32 sidesteps both."""
+    weight_fp32 = weight.detach().float()
+    absmax = weight_fp32.abs().amax(dim=-1)
+    scale = torch.where(absmax == 0, torch.ones_like(absmax), absmax / INT8_MAX)
+    quantized = (weight_fp32 / scale.unsqueeze(-1)).round().clamp(-INT8_MAX, INT8_MAX)
     return QuantizedTensor(data=quantized.to(torch.int8), scale=scale.to(torch.float32))
 
 
