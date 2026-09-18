@@ -237,7 +237,108 @@ Budget cap: $10, a ceiling not a target.
    finding), and decide live whether to move to a larger card within the
    $10 cap before continuing.
 
-8. **The baseline run** (`--drafter none`), this session's own reference:
+8. **Root-cause investigation (2026-09-17 session's own follow-up --
+   run this BEFORE trusting anything below).** The first session on this
+   branch produced a baseline that degenerated into repeating a single
+   token id for all 4 prompts, and both "correctness gates" passed only
+   because they matched that same degenerate output -- a vacuous pass, not
+   a real one (caught by the final whole-branch review, not by the
+   session itself, because the oracle wasn't independent). That
+   independence gap is now fixed (`plain_greedy_generate` in
+   `src/dispatch/speculative/decode.py`), but the underlying question --
+   *why* did the target model produce garbage -- was never answered, and
+   this session exists to answer it before spending any more money on
+   numbers that might again be meaningless.
+
+   Two competing hypotheses, cheapest-first:
+
+   **8a. Is it the quantized kernel, or the environment?** Run a short
+   (10-token, 1 prompt) plain greedy generation on the STOCK (bf16,
+   unpatched `moe_infer`) target, then the same on the QUANTIZED target,
+   both under this session's own monkeypatched environment (step 4).
+   Eyeball both outputs -- do they look like plausible English/code
+   continuations of the prompt, or degenerate/repetitive garbage?
+
+       .venv/bin/python <<'EOF'
+       import transformers.utils.import_utils as _iu
+       _iu.is_torch_fx_available = lambda: False
+       from transformers.cache_utils import DynamicCache
+
+       def _get_usable_length(self, new_seq_length=None, layer_idx=0):
+           return self.get_seq_length(layer_idx)
+
+       DynamicCache.get_usable_length = _get_usable_length
+
+       @classmethod
+       def _from_legacy_cache(cls, past_key_values=None):
+           return cls() if past_key_values is None else past_key_values
+
+       DynamicCache.from_legacy_cache = _from_legacy_cache
+       DynamicCache.to_legacy_cache = lambda self: self
+
+       import torch
+       from dispatch.benchmark.harness import load_model
+       from dispatch.speculative.decode import plain_greedy_generate
+
+       prompt = "The quick brown fox jumps over the lazy dog."
+
+       stock_model, tokenizer = load_model(
+           "deepseek-ai/deepseek-moe-16b-base",
+           device="cuda", dtype=torch.bfloat16, trust_remote_code=True,
+       )
+       _, stock_ids = plain_greedy_generate(stock_model, tokenizer, prompt, max_new_tokens=10, device="cuda")
+       print("STOCK:   ", stock_ids, "->", tokenizer.decode(stock_ids))
+
+       from dispatch.kernels.backends import resolve_quantized_backend
+       from dispatch.kernels.integration import patch_moe_infer_quantized
+       patched = patch_moe_infer_quantized(stock_model, resolve_quantized_backend())
+       print("patched:", patched)
+       _, quant_ids = plain_greedy_generate(stock_model, tokenizer, prompt, max_new_tokens=10, device="cuda")
+       print("QUANTIZED:", quant_ids, "->", tokenizer.decode(quant_ids))
+       EOF
+
+   Interpretation:
+   - **Both degenerate (e.g. both repeat one token, or both produce
+     obvious non-language garbage):** points at the environment
+     (most likely the `rope_scaling` file patch, which changes actual
+     model behavior, not just papers over a missing symbol -- unlike the
+     other 4 patches). Next: try loading the STOCK model with the
+     `rope_scaling` patch NOT applied (fresh `AutoConfig`/`AutoModel`
+     call before patching that file) and see if it alone is sane; if the
+     un-patched load also crashes with the original `KeyError: 'type'`,
+     that confirms the patch is necessary but something about *how* it's
+     applied needs a different fix than "treat as no scaling" -- consider
+     instead reading whatever real scaling parameters `transformers`
+     auto-populated (`print(stock_model.config.rope_scaling)` before
+     patching the file) and mapping them properly instead of discarding
+     them.
+   - **Only quantized degenerates, stock is sane:** points at Phase 5a's
+     quantized kernel interacting badly with this specific environment
+     (different from Phase 5a's own correctness gate, which ran under
+     `transformers==4.57.6`, not 5.17.0). Next: compare stock vs.
+     quantized logits directly at a single position (not through a full
+     generate loop) to localize which expert layer's output diverges.
+   - **Neither degenerates at 10 tokens:** the failure may only emerge
+     over a longer generation (the original run used 64 tokens per
+     prompt). Re-run both at `max_new_tokens=64` before concluding
+     anything, and inspect whether degeneration appears partway through
+     rather than immediately.
+
+   **8b. If 8a is inconclusive or both look sane at 10 tokens:** rerun
+   at the original `max_new_tokens=64` config, all 4 `SPECULATIVE_PROMPTS`,
+   stock only (cheapest single config that would have shown the original
+   symptom), before spending money on the quantized+drafter combinations.
+
+   **This step has its own stop condition:** if 8a/8b can't be resolved
+   within a reasonable fraction of the budget (a rough guide: stop and
+   reassess if this step alone exceeds $2 of the $10 cap), stop, report
+   exactly what was measured, and treat it as a genuine open finding
+   rather than pushing further speculative debugging on the clock.
+
+9. **The baseline run** (`--drafter none`), now generated by the
+   independent `plain_greedy_generate` oracle (not by
+   `run_speculative_rounds` itself, per the final whole-branch review's
+   fix):
 
        .venv/bin/python -m scripts.run_speculative_bench --trust-remote-code \
          --drafter none \
@@ -245,20 +346,44 @@ Budget cap: $10, a ceiling not a target.
 
    Must show `"moe_layers_patched": 27`.
 
-9. **Correctness gate -- draft-model drafter, exact match against the
-   baseline. Must pass before any timing is trusted.**
+   **Baseline plausibility check -- do this before trusting ANY
+   `token_match` result below.** The independent oracle only guards
+   against a bug in the shared speculative loop; it says nothing about
+   whether the target model itself is producing sane output. Read
+   `docs/findings/$DATE-phase-5b-baseline-generated-tokens.json`,
+   decode each prompt's token list with the tokenizer, and eyeball it:
 
-       .venv/bin/python -m scripts.run_speculative_bench --trust-remote-code \
-         --drafter draft-model \
-         --compare-generated-tokens docs/findings/$DATE-phase-5b-baseline-generated-tokens.json \
-         --run-label $DATE-phase-5b-draft-model
+       .venv/bin/python -c "
+       import json
+       from transformers import AutoTokenizer
+       tokenizer = AutoTokenizer.from_pretrained('deepseek-ai/deepseek-moe-16b-base', trust_remote_code=True)
+       tokens = json.load(open('docs/findings/$DATE-phase-5b-baseline-generated-tokens.json'))
+       for key, ids in tokens.items():
+           unique = len(set(ids))
+           print(key, 'unique_token_count=', unique, '/', len(ids))
+           print('  decoded:', repr(tokenizer.decode(ids)))
+       "
 
-   Must show `"moe_layers_patched": 27` and every prompt's `token_match`
-   `true`. Any `false` is a real bug -- stop and debug before proceeding
-   to step 11's throughput numbers; the exact-match bar (design doc
-   section 5) is not a suggestion.
+   If any prompt's `unique_token_count` is 1 (or otherwise clearly
+   degenerate/repetitive garbage on inspection), **stop** -- do not
+   proceed to steps 10-11. The correctness gates cannot be trusted
+   against a broken baseline no matter what they report. Go back to
+   step 8's investigation instead.
 
-10. **Correctness gate -- prompt-lookup drafter, same check:**
+10. **Correctness gate -- draft-model drafter, exact match against the
+    baseline. Must pass before any timing is trusted.**
+
+        .venv/bin/python -m scripts.run_speculative_bench --trust-remote-code \
+          --drafter draft-model \
+          --compare-generated-tokens docs/findings/$DATE-phase-5b-baseline-generated-tokens.json \
+          --run-label $DATE-phase-5b-draft-model
+
+    Must show `"moe_layers_patched": 27` and every prompt's `token_match`
+    `true`. Any `false` is a real bug -- stop and debug before proceeding
+    to step 12's throughput numbers; the exact-match bar (design doc
+    section 5) is not a suggestion.
+
+11. **Correctness gate -- prompt-lookup drafter, same check:**
 
         .venv/bin/python -m scripts.run_speculative_bench --trust-remote-code \
           --drafter prompt-lookup \
@@ -268,43 +393,48 @@ Budget cap: $10, a ceiling not a target.
     Must show `"moe_layers_patched": 27` and every prompt's `token_match`
     `true`.
 
-11. **Throughput and acceptance-rate comparison.** Read
+12. **Throughput and acceptance-rate comparison.** Read
     `mean_tokens_per_second` and `acceptance_rate` out of the three
-    results JSONs from steps 8-10 -- no separate benchmark tool needed,
+    results JSONs from steps 9-11 -- no separate benchmark tool needed,
     `run_speculative_bench`'s own harness already measured both
     identically for all three configurations, at the default
-    `--num-speculative-tokens 4`.
+    `--num-speculative-tokens 4`. Note: `acceptance_rate`'s denominator
+    is still the nominal `--num-speculative-tokens`, not the real count
+    of tokens actually proposed each round (a known, deferred precision
+    caveat -- see the ledger/final-review findings, item I1 -- direction
+    of the error is an undercount, so treat the reported acceptance rate
+    as a conservative lower bound, not exact).
 
-12. **k-sweep**, draft-model and prompt-lookup only. The original intent
-    was to target just the repetition-heavy prompt (the 4th of
+13. **k-sweep**, draft-model and prompt-lookup only, **now checking
+    exact-match correctness at every k, not just k=4** (the prior
+    session's own gap, finding I5 -- skipping this is what let a
+    degenerate baseline go uncaught in the first place). The original
+    intent was to target just the repetition-heavy prompt (the 4th of
     `SPECULATIVE_PROMPTS`) to keep this cheap, matching Phase 1's own
     token-count sweep's shape -- but `run_speculative_bench.py`'s actual
     CLI (Task 5) has no per-prompt selection flag; `SPECULATIVE_PROMPTS`
-    is always the full fixed list. Rather than add a new flag mid-session
-    (risking an untested bug under time/cost pressure for a purely
-    cost-saving optimization), this session ran the full 4-prompt suite
-    at each k instead. Still cheap in absolute terms ($0.82/hr card, 8
-    extra runs) -- confirm this reasoning still holds before repeating it,
-    or add the flag properly (with its own test) in a calmer moment if a
-    future phase wants the original narrower scope:
+    is always the full fixed list, so this still runs the full 4-prompt
+    suite at each k. Still cheap in absolute terms ($0.82/hr-class card,
+    8 extra runs):
 
         for K in 1 2 4 8; do
           .venv/bin/python -m scripts.run_speculative_bench --trust-remote-code \
             --drafter draft-model --num-speculative-tokens $K \
+            --compare-generated-tokens docs/findings/$DATE-phase-5b-baseline-generated-tokens.json \
             --run-label $DATE-phase-5b-k-sweep-draft-model-$K
           .venv/bin/python -m scripts.run_speculative_bench --trust-remote-code \
             --drafter prompt-lookup --num-speculative-tokens $K \
+            --compare-generated-tokens docs/findings/$DATE-phase-5b-baseline-generated-tokens.json \
             --run-label $DATE-phase-5b-k-sweep-prompt-lookup-$K
         done
 
-    (This sweep intentionally omits `--compare-generated-tokens`: steps
-    9-10 already proved exact-match correctness at k=4 for both drafters
-    across all 4 prompts; correctness does not depend on k, since the
-    verification rule is the same at every k, so the sweep only needs to
-    measure throughput/acceptance-rate, not re-verify correctness 8 more
-    times.)
+    Every one of these 8 runs must show `token_match: true` for all 4
+    prompts before its throughput number is trusted. A `false` at some k
+    but not others is itself a real, reportable finding (e.g. the prior
+    session's own unexplained k=1/k=2 divergence) -- do not discard it or
+    treat only the k=4 result as authoritative.
 
-13. **Cost record and teardown:**
+14. **Cost record and teardown:**
 
         .venv/bin/python -c "
         from pathlib import Path
