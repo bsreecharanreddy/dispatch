@@ -133,6 +133,15 @@ Every comparison runs vLLM/SGLang and this project's server against the
 **same model, same hardware, same request trace** — an apples-to-apples
 requirement, not a nice-to-have.
 
+> **Amended 2026-09-18 (Phase 6 design).** "This project's server" was
+> never built through Phase 5b: dispatch's engine is an in-process
+> Hugging Face eager decode loop with the MoE layer patched, so a
+> serving-benchmark race against vLLM/SGLang would measure that gap rather
+> than the kernel. Phase 6 instead runs a like-for-like kernel-level race
+> plus a labeled engine reference; see
+> `docs/design/2026-09-18-phase-6-final-benchmark.md`. A real dispatch
+> server belongs to Phase 7 (§8).
+
 ## 7. Phase plan
 
 | Phase | What | Cost shape |

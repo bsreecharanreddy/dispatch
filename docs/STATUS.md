@@ -504,6 +504,31 @@ Phase 6's own correctness gate measures agreement at scale on the exact
 config being benchmarked, and 5a's agreement figure is not to be quoted
 in the head-to-head as more than "true on a small sample".
 
+## Phase 6 progress
+
+**Design approved, 2026-09-18:**
+`docs/design/2026-09-18-phase-6-final-benchmark.md`, on branch
+`phase-6-final-benchmark`. No implementation plan or code yet, no GPU
+spent. Decided in brainstorming:
+
+- **Kernel-level race plus a labeled engine reference, not an end-to-end
+  race.** Design doc §6 assumed a dispatch server for the serving
+  benchmark to target; none exists (the engine is an in-process HF eager
+  loop), so an end-to-end race would measure that gap, not the kernel.
+  §6 is amended to say so. A real server belongs to Phase 7.
+- **One L40, ~$10 cap** (same GPU class as Phase 1 and 5a's kernel
+  numbers). Kernel race: dispatch naive/persistent vs. vLLM and SGLang
+  fused-MoE, uniform and zipf routing, bf16 and weight-only int8. Engine
+  reference: vLLM and SGLang serving the full model, concurrency 1/4/16/64,
+  dispatch at concurrency 1 only.
+- **Checked live 2026-09-18:** SGLang serves `DeepseekForCausalLM` (V1);
+  both engines' fused-MoE accept `use_int8_w8a16` + `per_channel_quant`;
+  SGLang's fused-MoE code was recently reorganized, so engine versions get
+  pinned and each engine sits behind one adapter.
+- **Stage 1 blocks the rest:** the at-scale correctness gate STATUS owes
+  from 5a/5b, with a large-gap disagreement threshold fixed in the plan
+  from 5b's near-tie data before any GPU time.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
@@ -512,7 +537,9 @@ merged (PR #4), as are Phase 5a (PR #5) and Phase 5b (PR #6), each on its
 own branch per the one-branch-per-phase convention. Phase 3's PR (#3) also
 merged.
 Phase 2's PR is still open and awaiting maintainer review; no further
-work planned on it beyond responding to review feedback. Phase 6 (final
-benchmark vs. vLLM/SGLang) planning can proceed; its correctness gate
-must include an at-scale agreement check on the benchmarked config (see
-"Scope of Phase 5a's agreement claim" above).
+work planned on it beyond responding to review feedback.
+
+Phase 6's design is approved (see "Phase 6 progress"). Next: write its
+implementation plan in `docs/plans/`, fixing the correctness gate's
+logit-gap threshold from Phase 5b's recorded data, then execute it task
+by task.
