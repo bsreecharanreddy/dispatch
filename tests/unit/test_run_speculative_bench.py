@@ -196,6 +196,41 @@ def test_main_exits_nonzero_on_token_divergence_but_keeps_the_evidence(
     assert (tmp_path / "spec-run-generated-tokens.json").exists()
 
 
+def test_run_speculative_bench_refuses_a_target_with_no_rope_buffers_fixed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression test for the scoped re-review finding that the new
+    rope_buffers_fixed==0 guard (added alongside the pre-existing
+    moe_layers_patched==0 one) had no test at any tier: a model that
+    patches MoE layers but matches no rotary-embedding shape must still
+    refuse to run, since that combination means fix_rope_inv_freq's
+    duck-typed shape stopped matching this target -- exactly the silent
+    regression the guard exists to catch."""
+    monkeypatch.setattr(
+        run_speculative_bench_module, "load_model", lambda *a, **k: ("the-model", "the-tokenizer")
+    )
+    monkeypatch.setattr(run_speculative_bench_module, "fix_rope_inv_freq", lambda model: 0)
+    monkeypatch.setattr(
+        run_speculative_bench_module, "patch_moe_infer_quantized", lambda model, backend: 27
+    )
+    monkeypatch.setattr(run_speculative_bench_module, "resolve_quantized_backend", object)
+
+    with pytest.raises(RuntimeError, match="fixed no RoPE buffers"):
+        run_speculative_bench_module.run_speculative_bench(
+            "some-model",
+            device="cpu",
+            dtype=torch.float32,
+            trust_remote_code=False,
+            prompts=["hello"],
+            repetitions=1,
+            max_new_tokens=3,
+            drafter_name="none",
+            draft_model_name="unused",
+            num_speculative_tokens=4,
+            prompt_lookup_ngram_size=3,
+        )
+
+
 @pytest.mark.gpu
 @pytest.mark.slow
 def test_run_speculative_bench_refuses_a_target_that_patches_nothing() -> None:
