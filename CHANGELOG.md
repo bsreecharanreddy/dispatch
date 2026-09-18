@@ -12,6 +12,36 @@ deletes its own evidence is not a retraction.
 No phase shipped yet (`v0.1.0` is still the scaffold version; a tag lands
 once a phase's exit criteria are actually met).
 
+- **Phase 5b (speculative decoding) complete**, 2026-09-18, merged via PR #6
+  (`docs/plans/2026-09-17-phase-5b-speculative-decoding-plan.md`). A shared
+  propose/verify/accept/rollback loop with two drafters (a 7B draft model,
+  and model-free prompt-lookup) on Phase 5a's int8 target, with an
+  independent plain-greedy oracle for the baseline — `make check` green
+  throughout (170 tests). **The first GPU session's numbers (+21.8% /
+  +76.9%) were withdrawn** by the final whole-branch review: its baseline
+  was a degenerate 64 x token-id-0 on every prompt. Root cause, found on a
+  second session across four pods: `transformers==5.17.0` leaves
+  DeepSeek's remote-code RoPE `inv_freq` buffer uninitialized after
+  `from_pretrained`, poisoning attention with NaN on GPU;
+  `fix_rope_inv_freq()` now runs inside `load_model` for every caller.
+  Re-measured on an A40 (bf16, unbatched, 64 new tokens, 4 prompts x 5
+  reps), checked against the baseline at every k: baseline **25.18
+  tok/s**; **only prompt-lookup beats it** (34.4-50.9 tok/s across k=1-8,
+  +77.7% at k=4 in the sweep), while the 7B draft model is below baseline
+  at every k (19.6-23.0). **Output is not always byte-exact against plain
+  greedy**: draft-model matched in 13 of 16 (prompt, k) combinations,
+  prompt-lookup in 9 of 16, and the same k=4 prompt-lookup config matched
+  2/4 prompts in one process and 3/4 in another. Root-caused by a
+  batch-width probe and a 10-trial determinism probe to a near-tied logit
+  under the int8 kernel's floating-point precision, not a logic error.
+  Open, deliberately unaudited: Phase 5a's "perfect top-1/top-k agreement"
+  used the same kernel and a single-run check that could not see this.
+  Two findings-doc figures were also corrected after re-verifying against
+  the results JSONs (see the git history of the findings doc). Cost:
+  **$12.26** across both sessions against a $10 cap that one pod exceeded
+  and that was raised to $20 with disclosure. Also: `docs/findings/` split
+  into one subfolder per phase. Full account:
+  `docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
 - **Phase 5a (int8 weight-only quantization) complete**, 2026-09-17
   (`docs/plans/2026-09-16-phase-5a-quantization-plan.md`). Self-computed,
   per-output-channel int8 quantization extending the Triton kernel

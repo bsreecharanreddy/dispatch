@@ -145,8 +145,8 @@ Community Cloud pods that hit a real host-level GPU passthrough bug
 before a Secure Cloud pod worked. Full account:
 `docs/findings/phase-5a/2026-09-17-phase-5a-quantization-run.md`.
 
-**Phase 5b (speculative decoding) is complete, 2026-09-18**, PR #6 open on
-`phase-5b-speculative-decoding`. A shared propose/verify/accept/rollback
+**Phase 5b (speculative decoding) is complete, 2026-09-18**, merged to
+`main` via PR #6. A shared propose/verify/accept/rollback
 loop with two drafters (a 7B draft model, and model-free prompt-lookup) on
 top of Phase 5a's int8 target, with an independent plain-greedy oracle for
 the baseline. The first GPU session's numbers were withdrawn by the final
