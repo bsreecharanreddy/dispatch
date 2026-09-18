@@ -34,9 +34,12 @@ once a phase's exit criteria are actually met).
   2/4 prompts in one process and 3/4 in another. Root-caused by a
   batch-width probe and a 10-trial determinism probe to a near-tied logit
   under the int8 kernel's floating-point precision, not a logic error.
-  Open, deliberately unaudited: Phase 5a's "perfect top-1/top-k agreement"
-  used the same kernel and a single-run check that could not see this.
-  Two findings-doc figures were also corrected after re-verifying against
+  Phase 5a's "perfect top-1/top-k agreement" used the same kernel but is a
+  small sample (29 positions, one run, `transformers==4.57.6`, so not
+  affected by the RoPE bug; its logit differences were finite and
+  non-zero, so it was not a degenerate-output pass) -- too few positions
+  to rule this sensitivity out, so Phase 6's correctness gate re-checks
+  agreement at scale rather than leaning on 5a's number. Two findings-doc figures were also corrected after re-verifying against
   the results JSONs (see the git history of the findings doc). Cost:
   **$12.26** across both sessions against a $10 cap that one pod exceeded
   and that was raised to $20 with disclosure. Also: `docs/findings/` split

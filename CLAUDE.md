@@ -162,10 +162,13 @@ the 8-config sweep draft-model matched in 13 of 16 (prompt, k)
 combinations and prompt-lookup in 9 of 16, and the same k=4 prompt-lookup
 config matched 2/4 prompts in one process and 3/4 in another. Root cause,
 confirmed by two GPU probes: a genuine near-tied logit under the int8
-kernel's floating-point precision, not a logic bug in the loop. **Open
-question, deliberately not audited:** Phase 5a's own "perfect top-1/top-k
-agreement" claim used this same kernel and a single-run check that could
-not see this. Cost: **$12.26** across both sessions, against a $10 cap
+kernel's floating-point precision, not a logic bug in the loop. **Scope
+of Phase 5a's claim:** its "perfect top-1/top-k agreement" used this same
+kernel but is a small sample (29 positions, one run, on
+`transformers==4.57.6`, so unaffected by the RoPE bug; finite non-zero
+logit diffs, so not a degenerate-output pass) -- too few to rule out
+this sensitivity, so Phase 6's correctness gate re-checks agreement at
+scale on the benchmarked config instead of leaning on 5a's number. Cost: **$12.26** across both sessions, against a $10 cap
 that was exceeded on one pod and raised to $20 with disclosure. Full
 account: `docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
 

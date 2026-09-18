@@ -486,13 +486,23 @@ $10.8848; `5ufi854zxkfwbz` (A40) $0.2022; `d2h1sgmr5wjssv` (A40, where
 the real baseline/gates/k-sweep ran) $0.49. All four pods stopped or
 terminated.
 
-**Open question, flagged for the project owner, not audited here**:
-this session's root-cause work found concrete evidence of near-tie
-floating-point sensitivity in `grouped_matmul_int8`, the same quantized
-kernel Phase 5a's own "perfect top-1/mutual-top-k agreement" claim was
-measured against. That claim may not be wrong, but the single-run
-top-k check it relied on would not have caught this specific failure
-mode. Re-auditing Phase 5a was out of this task's scope.
+**Scope of Phase 5a's agreement claim (resolved as an input to Phase 6,
+2026-09-18)**: this session's root-cause work found concrete evidence of
+near-tie floating-point sensitivity in `grouped_matmul_int8`, the same
+quantized kernel Phase 5a's "perfect top-1/mutual-top-k agreement" claim
+was measured against. Checked against the record, without new GPU spend:
+Phase 5a's GPU session ran on `transformers==4.57.6` (a pod-side
+override of this repo's `>=5.17.0` floor), the version the RoPE
+`inv_freq` bug was never observed on, and its `max_abs_diff` values
+(2.125 / 1.906 / 1.344, one per prompt) are finite and differ per
+prompt, so it was not a degenerate-output pass. (That 4.57.6 is
+unaffected was inferred from those numbers, not tested directly.) What
+does stand: the check covered 29 positions in a single run, quantized
+vs. naive bf16 -- too small a sample to rule out the 0.1-0.4 logit-gap
+near-ties 5b found. Decision: do not re-rent a GPU just to re-audit 5a;
+Phase 6's own correctness gate measures agreement at scale on the exact
+config being benchmarked, and 5a's agreement figure is not to be quoted
+in the head-to-head as more than "true on a small sample".
 
 ## Next step
 
@@ -503,5 +513,6 @@ own branch per the one-branch-per-phase convention. Phase 3's PR (#3) also
 merged.
 Phase 2's PR is still open and awaiting maintainer review; no further
 work planned on it beyond responding to review feedback. Phase 6 (final
-benchmark vs. vLLM/SGLang) planning can proceed, and should treat the
-Phase 5a audit question above as an open input, not a blocker.
+benchmark vs. vLLM/SGLang) planning can proceed; its correctness gate
+must include an at-scale agreement check on the benchmarked config (see
+"Scope of Phase 5a's agreement claim" above).

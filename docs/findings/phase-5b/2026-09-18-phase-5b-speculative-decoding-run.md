@@ -295,21 +295,31 @@ from committed files the way the aggregate metrics are. Lesson applied
 going forward: pull evidence files off a rented pod before any `stop`,
 not after.
 
-## Open question, explicitly flagged for the project owner, not pursued here
+## What this means for Phase 5a's agreement claim
 
-This session's root-cause work directly strengthens a concern first
-raised (but not investigated) earlier in this session: **Phase 5a's own
-"perfect model-level top-1/mutual-top-k agreement" claim used this exact
-same `grouped_matmul_int8` kernel**, and this session found concrete,
-measured evidence that this kernel has genuine near-tie floating-point
-sensitivity across separate process launches -- exactly the failure
-mode a single-run top-k agreement check cannot see. This is not a claim
-that Phase 5a's result is wrong; it is a claim that Phase 5a's own
-correctness check was not built to detect this specific failure mode,
-and now there is direct measurement (not just a theoretical concern)
-that the failure mode is real for this kernel. Auditing Phase 5a is out
-of this task's scope and was not attempted -- flagged here for a
-decision by the project owner.
+**Phase 5a's "perfect model-level top-1/mutual-top-k agreement" claim
+used this exact same `grouped_matmul_int8` kernel**, and this session
+found concrete, measured evidence that the kernel has genuine near-tie
+floating-point sensitivity across separate process launches. An earlier
+draft of this section worried Phase 5a's result might be vacuous (the
+RoPE bug producing degenerate output that trivially "agrees"). Checking
+the Phase 5a record showed that worry does not hold:
+
+- Phase 5a's GPU session ran on `transformers==4.57.6`, a pod-side
+  override of this repo's `>=5.17.0` floor (its own Environment section
+  and runbook say so). The RoPE `inv_freq` bug was observed only under
+  `5.17.0`. That 4.57.6 is unaffected is inferred, not tested directly.
+- Its `max_abs_diff` values (2.125 / 1.906 / 1.344, one per prompt) are
+  finite, non-zero and different per prompt; NaN or all-token-0 logits
+  would not produce that.
+
+What does stand: that check covered 29 token positions (11 + 11 + 7) in
+a single run, comparing quantized against naive bf16. That is too small
+a sample to rule out near-ties like the 0.1-0.4 top-2 logit gaps found
+here, so Phase 5a's claim is "true on a small sample", not "shown wrong".
+No GPU money was spent re-auditing it; instead Phase 6's correctness gate
+measures agreement at scale on the exact config it benchmarks, and 5a's
+figure should not be quoted in the head-to-head as more than that.
 
 ## Summary
 
@@ -346,7 +356,8 @@ runs per config on one pod; the k=4 prompt-lookup repeat (47.21 vs.
 
 **Total real GPU cost across both Phase 5b sessions: $12.26 of the $20
 cap (61.3%)**, including a disclosed and corrected cost-cap incident
-earlier in this session. **One open question is flagged, not resolved,
-for the project owner**: whether Phase 5a's own correctness claim should
-be re-examined in light of this session's concrete evidence of near-tie
-sensitivity in the same quantized kernel.
+earlier in this session. **Phase 5a's agreement claim** (same kernel) is
+scoped, not overturned: it ran on `transformers==4.57.6`, so it is not
+the RoPE-bug artifact an earlier draft feared, but 29 positions in one
+run cannot rule out the near-tie sensitivity found here -- Phase 6's
+correctness gate re-checks agreement at scale instead.
