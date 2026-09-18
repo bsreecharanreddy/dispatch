@@ -56,7 +56,7 @@ DEFAULT_PROMPTS = [
 ]
 MAX_NEW_TOKENS = 8
 ARRIVAL_STAGGER_S = 0.05
-OUTPUT_DIR = Path("docs/findings")
+OUTPUT_DIR = Path("docs/findings/phase-4")
 
 
 # See phase4_correctness_gate.py's own module docstring/comments for why

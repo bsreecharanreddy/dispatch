@@ -17,6 +17,8 @@ htmlcov/
 *.safetensors
 *.gguf
 *.bin
+# git-archive snapshots made to ship the repo to a rented pod.
+*.tar
 wandb/
 .cache/
 

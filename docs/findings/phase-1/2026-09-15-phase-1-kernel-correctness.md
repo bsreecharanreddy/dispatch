@@ -92,7 +92,7 @@ suite can fail, and the fix restores it.
 
 $0.0606 for 991 seconds (16.5 minutes) of RTX 3090 rental at $0.22/hr --
 well under the $3 cap. Full record:
-`docs/findings/2026-09-15-phase-1-kernel-correctness-cost.md`. Duration
+`docs/findings/phase-1/2026-09-15-phase-1-kernel-correctness-cost.md`. Duration
 provenance: measured directly as `datetime.now(timezone.utc) -
 <pod's API-reported start time>` (start: `2026-09-15T15:43:56Z`, from
 the create-pod response's `startedAt` field) immediately before invoking

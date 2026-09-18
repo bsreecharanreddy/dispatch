@@ -115,7 +115,7 @@ The `max_abs_diff` values (0.68-1.22) are the same order of magnitude as
 Phase 1's own control-row numbers (0.66-1.90, from an eager reformulation
 with no kernel or cross-GPU transport involved at all), i.e. ordinary
 bf16 summation-order noise, not evidence of a correctness problem.
-Full data: `docs/findings/2026-09-16-phase-3-correctness-gate-results.json`.
+Full data: `docs/findings/phase-3/2026-09-16-phase-3-correctness-gate-results.json`.
 
 ## The measured answer to Phase 3's thesis
 
@@ -220,4 +220,4 @@ single-request scale this project has scoped to throughout.
 
 **Total: $13.03** of the $25 cap, 2x H200 SXM at $9.18/hr, 85 minutes
 (pod creation to termination). Full record:
-`docs/findings/2026-09-16-phase-3-multi-gpu-ep-cost.md`.
+`docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-cost.md`.

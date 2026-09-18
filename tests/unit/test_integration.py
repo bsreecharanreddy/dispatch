@@ -14,7 +14,11 @@ import pytest
 import torch
 
 from dispatch.kernels import integration as integration_module
-from dispatch.kernels.integration import patch_moe_infer, patch_moe_infer_quantized
+from dispatch.kernels.integration import (
+    fix_rope_inv_freq,
+    patch_moe_infer,
+    patch_moe_infer_quantized,
+)
 from dispatch.kernels.moe_forward import stack_expert_weights, torch_grouped_matmul
 from dispatch.kernels.quantization import (
     dequantize_int8,
@@ -197,3 +201,142 @@ def test_patch_quantized_rejects_experts_that_are_not_a_module_list() -> None:
 
     with pytest.raises(TypeError, match="ModuleList"):
         patch_moe_infer_quantized(Odd(), torch_grouped_matmul_dequant)
+
+
+class _FakeRotaryEmbedding(torch.nn.Module):
+    """Duck-types DeepseekRotaryEmbedding's shape (inv_freq/dim/base/
+    max_seq_len_cached) AND its real forward()/_set_cos_sin_cache()
+    rebuild guard (`max_seq_len_cached is None or seq_len > ...`) -- so
+    a test can exercise the fix's second half (forcing forward() to
+    rebuild cos/sin from the *corrected* inv_freq) on CPU, not just
+    assert the precondition for it."""
+
+    def __init__(self, dim: int, base: int, corrupted_inv_freq: torch.Tensor) -> None:
+        super().__init__()
+        self.dim = dim
+        self.base = base
+        self.register_buffer("inv_freq", corrupted_inv_freq, persistent=False)
+        self.max_seq_len_cached = 11  # a real forward call would have set this
+        # Garbage caches, standing in for what a real model's stale
+        # cos_cached/sin_cached (derived from the corrupted inv_freq)
+        # would look like right after loading, before any fix runs.
+        self.register_buffer("cos_cached", torch.zeros(11, dim), persistent=False)
+        self.register_buffer("sin_cached", torch.zeros(11, dim), persistent=False)
+
+    def _set_cos_sin_cache(self, seq_len: int) -> None:
+        self.max_seq_len_cached = seq_len
+        t = torch.arange(seq_len, dtype=torch.float32)
+        freqs = torch.einsum("i,j->ij", t, cast(torch.Tensor, self.inv_freq))
+        emb = torch.cat((freqs, freqs), dim=-1)
+        self.cos_cached = emb.cos()
+        self.sin_cached = emb.sin()
+
+    def forward(self, seq_len: int) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.max_seq_len_cached is None or seq_len > self.max_seq_len_cached:
+            self._set_cos_sin_cache(seq_len)
+        return self.cos_cached[:seq_len], self.sin_cached[:seq_len]
+
+
+class _FakeAttention(torch.nn.Module):
+    def __init__(self, rotary_emb: _FakeRotaryEmbedding) -> None:
+        super().__init__()
+        self.rotary_emb = rotary_emb
+
+
+class _NativeLlamaStyleRotaryEmbedding(torch.nn.Module):
+    """Shaped like transformers' own (non-remote-code) 5.x
+    LlamaRotaryEmbedding: has inv_freq and max_seq_len_cached, but not
+    dim/base (it takes a config object in its __init__ instead) -- the
+    exact shape a native, non-DeepSeek draft model's rotary embedding
+    has today, per the final review. Must NOT match: a real Llama-native
+    model's inv_freq is not corrupted by this bug, so fixing it here
+    would rewrite a buffer this function has no evidence is wrong."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("inv_freq", torch.tensor([1.0, 0.1, 0.01, 0.001]), persistent=False)
+        self.max_seq_len_cached = 2048
+
+
+def _expected_inv_freq(dim: int, base: int) -> torch.Tensor:
+    return 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+
+
+def test_fix_rope_inv_freq_recomputes_a_corrupted_buffer() -> None:
+    garbage = torch.tensor([float("nan"), 0.0, 0.0, 0.0])
+    rotary = _FakeRotaryEmbedding(dim=8, base=10000, corrupted_inv_freq=garbage)
+    model = _FakeAttention(rotary)
+
+    fixed = fix_rope_inv_freq(model)
+
+    assert fixed == 1
+    # Literal expected values, not a second call to the same formula the
+    # implementation uses -- a shared misunderstanding of DeepSeek's own
+    # formula would otherwise pass silently (dim=8, base=10000: exponents
+    # 0/8, 2/8, 4/8, 6/8 -> 10000**0, 10000**0.25, 10000**0.5, 10000**0.75
+    # -> 1, 10, 100, 1000, inverted).
+    assert torch.allclose(
+        cast(torch.Tensor, rotary.inv_freq), torch.tensor([1.0, 0.1, 0.01, 0.001])
+    )
+    assert rotary.max_seq_len_cached is None
+
+
+def test_fix_rope_inv_freq_forces_forward_to_rebuild_from_the_corrected_buffer() -> None:
+    """The fix has two halves: recomputing inv_freq, and resetting
+    max_seq_len_cached so the next forward() call actually rebuilds
+    cos_cached/sin_cached from it (they were derived from the corrupted
+    buffer and are just as wrong). This test fails if either half is
+    missing: skip the inv_freq fix and the expected values below are
+    wrong; skip the max_seq_len_cached reset and forward() returns the
+    stale garbage cache untouched (seq_len=5 <= the fake's initial
+    max_seq_len_cached=11, so the guard's `seq_len > ...` branch alone
+    would never trigger a rebuild)."""
+    dim, base = 8, 10000
+    garbage = torch.tensor([float("nan"), 0.0, 0.0, 0.0])
+    rotary = _FakeRotaryEmbedding(dim, base, garbage)
+    model = _FakeAttention(rotary)
+
+    fix_rope_inv_freq(model)
+    cos, sin = rotary(seq_len=5)
+
+    t = torch.arange(5, dtype=torch.float32)
+    expected_freqs = torch.einsum("i,j->ij", t, _expected_inv_freq(dim, base))
+    expected_emb = torch.cat((expected_freqs, expected_freqs), dim=-1)
+    assert torch.allclose(cos, expected_emb.cos())
+    assert torch.allclose(sin, expected_emb.sin())
+
+
+def test_fix_rope_inv_freq_fixes_every_layer_found() -> None:
+    class ManyLayers(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.layers = torch.nn.ModuleList(
+                [_FakeAttention(_FakeRotaryEmbedding(8, 10000, torch.zeros(4))) for _ in range(3)]
+            )
+
+    model = ManyLayers()
+
+    fixed = fix_rope_inv_freq(model)
+
+    assert fixed == 3
+    for module in model.layers:
+        layer = cast(_FakeAttention, module)
+        assert torch.allclose(
+            cast(torch.Tensor, layer.rotary_emb.inv_freq), _expected_inv_freq(8, 10000)
+        )
+
+
+def test_fix_rope_inv_freq_ignores_modules_without_the_rope_shape() -> None:
+    model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
+
+    fixed = fix_rope_inv_freq(model)
+
+    assert fixed == 0
+
+
+def test_fix_rope_inv_freq_ignores_a_native_llama_shaped_rotary_embedding() -> None:
+    model = _NativeLlamaStyleRotaryEmbedding()
+
+    fixed = fix_rope_inv_freq(model)
+
+    assert fixed == 0

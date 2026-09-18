@@ -1,0 +1,18 @@
+{
+  "model": "deepseek-ai/deepseek-moe-16b-base",
+  "draft_model": "deepseek-ai/deepseek-llm-7b-base",
+  "device": "cuda",
+  "dtype": "bfloat16",
+  "drafter": "draft-model",
+  "num_speculative_tokens": 8,
+  "prompt_lookup_ngram_size": 3,
+  "moe_layers_patched": 27,
+  "acceptance_rate": 0.8028571428571428,
+  "run_count": 20,
+  "mean_ttft": 0.3042797455564141,
+  "p50_ttft": 0.2505626210477203,
+  "p99_ttft": 1.1248014212865367,
+  "mean_inter_token_latency": 0.028998252929424838,
+  "mean_tokens_per_second": 32.252192227201526,
+  "token_match": {}
+}

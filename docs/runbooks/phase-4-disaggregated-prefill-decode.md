@@ -10,7 +10,7 @@ corrected the plan before any measurement happened. Total cost:
 **$10.94** of the $40 cap (docs/findings/
 2026-09-17-phase-4-disaggregated-prefill-decode-cost.md). Full account,
 including the correctness gate results and the measured contention
-comparison: `docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+comparison: `docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
 
 1. Create and wait for the 4-GPU pod, reusing Phase 3's generic
    `--gpu-count` support:
@@ -173,4 +173,4 @@ comparison: `docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.m
    Confirmed via a follow-up `list-pods` returning an empty list.
 
 10. Recorded the measured cost via `write_cost_record`, reused
-    unmodified: `docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-cost.md`.
+    unmodified: `docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-cost.md`.

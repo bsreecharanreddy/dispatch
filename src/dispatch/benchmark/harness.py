@@ -18,6 +18,7 @@ from transformers import (
 )
 
 from dispatch.benchmark.metrics import TokenTimings
+from dispatch.kernels.integration import fix_rope_inv_freq
 
 
 def load_model(
@@ -26,14 +27,26 @@ def load_model(
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
     trust_remote_code: bool = False,
+    attn_implementation: str | None = None,
 ) -> tuple[PreTrainedModel, PreTrainedTokenizerBase]:
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=trust_remote_code)
+    extra_kwargs = (
+        {} if attn_implementation is None else {"attn_implementation": attn_implementation}
+    )
     model = AutoModelForCausalLM.from_pretrained(
-        model_name, dtype=dtype, trust_remote_code=trust_remote_code
+        model_name, dtype=dtype, trust_remote_code=trust_remote_code, **extra_kwargs
     )
     # torch's Module.to() overloads don't resolve a str device; Module.eval() is untyped.
     model.to(device)  # type: ignore[arg-type]
     model.eval()  # type: ignore[no-untyped-call]
+    # Applied unconditionally, for every caller of load_model (not just
+    # scripts/run_speculative_bench.py) -- transformers>=5.17.0 (this
+    # project's own pinned floor) leaves DeepSeek's remote code's RoPE
+    # inv_freq buffer uninitialized after from_pretrained (see
+    # fix_rope_inv_freq's own docstring). A model that doesn't match its
+    # duck-typed shape (anything but this bug's exact rotary-embedding
+    # class) is left untouched -- harmless and idempotent either way.
+    fix_rope_inv_freq(model)
     return model, tokenizer
 
 

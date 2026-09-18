@@ -73,7 +73,7 @@ DEFAULT_PROMPTS = [
     "def fibonacci(n):",
 ]
 MAX_NEW_TOKENS = 16
-OUTPUT_DIR = Path("docs/findings")
+OUTPUT_DIR = Path("docs/findings/phase-4")
 REFERENCE_PATH = OUTPUT_DIR / "2026-09-16-phase-4-single-gpu-reference.json"
 
 

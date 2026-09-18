@@ -1,0 +1,10 @@
+{
+  "after": "quantized target only",
+  "moe_layers_patched": 27,
+  "allocated_gb": 16.75,
+  "reserved_gb": 17.49
+}{
+  "after": "quantized target + bf16 draft model",
+  "allocated_gb": 29.62,
+  "reserved_gb": 29.86
+}

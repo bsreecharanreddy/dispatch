@@ -35,7 +35,7 @@ and confirmed no open issue requests it in either tracker.
 
 Phase 1 already built exactly this — a zipf-vs-uniform expert-load
 generator, used for the token-count sweep in
-`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md` — making this a
+`docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md` — making this a
 direct, reusable contribution rather than new work invented for the
 occasion.
 
@@ -146,7 +146,7 @@ CODEOWNERS auto-request @mgoin rather than hand-tagging.
   recording the measured config divergence, the GPU cost, and the PR's
   outcome (opened / under review / merged / rejected, honestly reported
   whichever it is) — same pattern as
-  `docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
+  `docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md`.
 
 ## 8. Explicit non-goals (project-level)
 

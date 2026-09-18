@@ -60,7 +60,7 @@ it.
 
 **Task 8's real run found three more bugs, all in the environment rather
 than in `dispatch`'s own code** -- see
-`docs/findings/2026-09-14-phase-0-baseline-run.md` for the full account:
+`docs/findings/phase-0/2026-09-14-phase-0-baseline-run.md` for the full account:
 DeepSeek's `trust_remote_code` modeling file calling a `transformers`
 utility (`is_torch_fx_available`) removed entirely by transformers 5.17.0
 (this repo's pinned floor); the same file calling a `Cache` method
@@ -79,13 +79,13 @@ decode, 15 runs (3 prompts x 5 repetitions, 64 max new tokens):
 stock at deploy time), all three failed attempts included since the model
 was already cached locally by the second one. Pod verified `TERMINATED`
 independently after deletion. Full record:
-`docs/findings/2026-09-14-phase-0-baseline-results.json` and
+`docs/findings/phase-0/2026-09-14-phase-0-baseline-results.json` and
 `2026-09-15-phase-0-baseline-cost.md` (both committed). The reference
 logits (`-reference.safetensors`, Phase 1's correctness oracle) are
 **not** committed -- `.gitignore` excludes `*.safetensors` repo-wide by
 design; the file exists locally but Phase 1 regenerates it from
 `capture_reference_logits` rather than relying on a checked-in blob.
-See `docs/findings/2026-09-14-phase-0-baseline-run.md` for the full
+See `docs/findings/phase-0/2026-09-14-phase-0-baseline-run.md` for the full
 account.
 
 ## Phase 1 progress
@@ -116,7 +116,7 @@ clean outcome. One real, non-kernel bug found and fixed: a
 a real device. A mutation check (forcing every tile to read expert 0's
 weights) turned 24/25 tests red, confirmed the revert was clean, and
 reran green -- the suite can fail. Cost: **$0.0606** for 991s of RTX 3090
-rental. Full account: `docs/findings/2026-09-15-phase-1-kernel-correctness.md`.
+rental. Full account: `docs/findings/phase-1/2026-09-15-phase-1-kernel-correctness.md`.
 
 Task 7 adds `dispatch.kernels.backends` (`BACKENDS = ("torch", "naive",
 "persistent")` and `resolve_backend`, which imports the Triton kernel
@@ -184,7 +184,7 @@ before the run happened (unbatched decode gives each expert too few rows
 for L2 tile reuse to matter) -- but wins 3-8% at 16-128 tokens and loses
 by up to 14% at 512-2048, a workload-specific result recorded rather than
 buried. Full account:
-`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
+`docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md`.
 
 **Total Phase 1 GPU cost: $0.65** across both paid sessions ($0.0606
 kernel correctness + $0.5916 the measured run) -- both well under their
@@ -225,7 +225,7 @@ including three real environment issues found and fixed (a failed
 precompiled-wheel install, a local-package-shadowing bug affecting Ray
 workers, and RunPod's proxy-only SSH access for this pod) and every
 deviation from the plan and why:
-`docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
+`docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md`.
 
 ## Phase 3 progress
 
@@ -279,7 +279,7 @@ tested point of 16) -- real single-request EP traffic lands close to
 Phase 1's single-token-decode tie, not its 16-128-token win region.
 Both kernels sit near a shared ~0.5ms latency floor at that real scale.
 Full account, including the exact bugs, fixes, and every number:
-`docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md`.
+`docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-run.md`.
 
 **Total Phase 3 GPU cost: $13.03** of the $25 cap, 2x H200 SXM, 85
 minutes.
@@ -336,7 +336,7 @@ contention). Reported as genuinely inconclusive rather than forced into
 either direction; a warmed-up measurement protocol is the identified
 follow-up, not attempted this session per the standing cost-discipline
 instruction once both correctness gates had passed. Full account:
-`docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+`docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
 
 **Total Phase 4 GPU cost: $10.94** of the $40 cap, 4x H100 SXM, 47
 minutes.
@@ -409,12 +409,98 @@ the pod with `hf_transfer` not installed.
 
 **Total Phase 5a GPU cost: $1.9543** of the $5 cap (39.1%), across all
 three pods including both abandoned Community Cloud attempts. Full
-account: `docs/findings/2026-09-17-phase-5a-quantization-run.md`.
+account: `docs/findings/phase-5a/2026-09-17-phase-5a-quantization-run.md`.
+
+## Phase 5b progress
+
+Design: `docs/design/2026-09-17-phase-5b-speculative-decoding.md`. Plan:
+`docs/plans/2026-09-17-phase-5b-speculative-decoding-plan.md`. Branch
+`phase-5b-speculative-decoding`.
+
+- [x] Task 1: `Drafter` protocol and `PromptLookupDrafter` (`src/dispatch/speculative/drafters.py`)
+- [x] Task 2: `DraftModelDrafter`
+- [x] Task 3: The shared speculative decode loop (`src/dispatch/speculative/decode.py`)
+- [x] Task 4: Exact generated-token reference capture/compare (`src/dispatch/speculative/reference.py`)
+- [x] Task 5: CLI (`scripts/run_speculative_bench.py`)
+- [x] Task 6: GPU rental runbook -- correctness gates, measured run, k-sweep
+- [x] Task 7: this update
+- [x] Final whole-branch review fix wave, 2026-09-17: independent
+      correctness oracle, runtime cache-lag assertions, a real
+      end-to-end draft-model test -- and withdrawal of the GPU session's
+      throughput/correctness-gate numbers below (see below)
+- [x] Task 8, 2026-09-18: root-cause `fix_rope_inv_freq()` (commit
+      `c5b59df`) for the withdrawn baseline's degenerate output; real
+      GPU re-run (baseline, both gates, full k-sweep, every point
+      checked against the baseline) superseding the withdrawal
+
+**Phase 5b is complete, 2026-09-18.** The prior session's degenerate
+baseline (finding C1) is root-caused and fixed: `transformers==5.17.0`
+leaves DeepSeek's remote code's RoPE `inv_freq` buffer uninitialized
+after `from_pretrained`, poisoning every attention layer with NaN on
+GPU. Fixed permanently via `fix_rope_inv_freq()`
+(`src/dispatch/kernels/integration.py`, commit `c5b59df`), wired into
+`scripts/run_speculative_bench.py` for both the target and any draft
+model. `make check` green throughout; lint and `mypy --strict` clean.
+
+**What the prior review found, and what this session's real GPU run
+confirmed as root-caused rather than a shared-code artifact**: the
+original baseline (`--drafter none`) generated a degenerate output --
+64 repetitions of token id `0` -- caused by the uninitialized-`inv_freq`
+bug above, not by the shared propose/verify/accept/rollback loop
+(`run_speculative_rounds`) itself, which was re-derived by hand this
+session and found correct for every candidate-count case. Full account
+of the fix, the real re-measured baseline, both correctness gates, and
+the full k-sweep (checked at every k this time, closing finding I5):
+`docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
+
+**Real, non-degenerate results, 2026-09-18** (A40, bf16, int8 target
+kernel, unbatched decode, 64 new tokens, 4 prompts x 5 reps): baseline
+25.18 tok/s. draft-model k=4 gate: byte-exact on all 4 prompts, 23.03
+tok/s (-8.5% vs. baseline), 74.5% acceptance. prompt-lookup k=4 gate:
+byte-exact on 2 of 4 prompts, 47.21 tok/s, 17.7% acceptance; the same
+config re-run in the k-sweep matched 3 of 4 (44.74 tok/s, +77.7%) --
+same code and flags, different process, different outcome. Across the
+8-config k-sweep, draft-model matched the baseline in 13 of 16
+(prompt, k) combinations and prompt-lookup in 9 of 16; prompt_000
+diverged in 6 of 8 configs (all but k=4), including draft-model at
+k=1/2/8. Root-caused live on the rented GPU to a genuine near-tied
+logit position under the int8-quantized kernel's actual floating-point
+precision -- confirmed by two independent probes (a batch-width sweep
+and a 10-trial same-process determinism check) -- not a defect in
+`dispatch.speculative`. **Only prompt-lookup beats the baseline**
+(34.4-50.9 tok/s across k=1-8); draft-model is below it at every k
+(19.6-23.0), despite 2-7x higher acceptance.
+
+**Memory checkpoints** (from the original 2026-09-17 session, not
+re-measured this session -- allocator behavior is unrelated to the
+token-correctness bug this session fixed): quantized target alone
+allocates 16.75GB, target plus bf16 draft model together 29.62GB --
+both well within a single GPU's capacity, no OOM at either checkpoint.
+
+**Total Phase 5b GPU cost across both sessions: $12.26 of the $20 cap**
+(61.3% -- cap raised from the original $10 mid-session, 2026-09-18,
+after a disclosed cost overrun on one pod left running through an
+unbounded wait; user ruling: raise to $20 and continue). Per-pod:
+`2t6wh9l3okl3gj` (L40, 2026-09-17) $0.6833; `oby7hbkzx8o8yt` (L40)
+$10.8848; `5ufi854zxkfwbz` (A40) $0.2022; `d2h1sgmr5wjssv` (A40, where
+the real baseline/gates/k-sweep ran) $0.49. All four pods stopped or
+terminated.
+
+**Open question, flagged for the project owner, not audited here**:
+this session's root-cause work found concrete evidence of near-tie
+floating-point sensitivity in `grouped_matmul_int8`, the same quantized
+kernel Phase 5a's own "perfect top-1/mutual-top-k agreement" claim was
+measured against. That claim may not be wrong, but the single-run
+top-k check it relied on would not have caught this specific failure
+mode. Re-auditing Phase 5a was out of this task's scope.
 
 ## Next step
 
-Phase 4 is merged (PR #4). Phase 5a is complete and ready to push as a
-PR. Phase 3's PR (#3) already merged. Phase 2's PR is still open and
-awaiting maintainer review; no further work planned on it beyond
-responding to review feedback. Phase 5b (speculative decoding) is not
-yet planned.
+Phase 5b is done: root cause fixed, real numbers measured, both
+correctness gates and the full k-sweep checked and explained. Phase 4 is
+merged (PR #4). Phase 5a and Phase 5b are both ready to push as PRs per
+the one-branch-per-phase convention. Phase 3's PR (#3) already merged.
+Phase 2's PR is still open and awaiting maintainer review; no further
+work planned on it beyond responding to review feedback. Phase 6 (final
+benchmark vs. vLLM/SGLang) planning can proceed, and should treat the
+Phase 5a audit question above as an open input, not a blocker.

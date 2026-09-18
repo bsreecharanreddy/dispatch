@@ -68,12 +68,12 @@ divergence is in `GROUP_SIZE_M` and `num_stages`, not a wholesale
 different tile shape, and is reported at exactly that strength rather
 than oversold.
 
-Raw output: `docs/findings/2026-09-15-phase-2-tuned-uniform.json`,
-`docs/findings/2026-09-15-phase-2-tuned-zipf.json`.
+Raw output: `docs/findings/phase-2/2026-09-15-phase-2-tuned-uniform.json`,
+`docs/findings/phase-2/2026-09-15-phase-2-tuned-zipf.json`.
 
 ## Cost and session account
 
-Full record: `docs/findings/2026-09-16-phase-2-vllm-benchmark-cost.md`
+Full record: `docs/findings/phase-2/2026-09-16-phase-2-vllm-benchmark-cost.md`
 (via `scripts/gpu/provision.py`'s `write_cost_record`, reused unmodified
 from Phase 1).
 

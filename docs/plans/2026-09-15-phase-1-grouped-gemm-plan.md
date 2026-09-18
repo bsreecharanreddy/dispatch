@@ -28,7 +28,7 @@ pod-local 4.57.6 override), RunPod.
 scope and build order), §6 (benchmark methodology, the same-hardware rule),
 §7 (the Phase 1 row), §9 (cost plan), §10 (what "done" looks like);
 `docs/adr/0001` (why grouped-GEMM at all); and
-`docs/findings/2026-09-14-phase-0-baseline-run.md` -- the three
+`docs/findings/phase-0/2026-09-14-phase-0-baseline-run.md` -- the three
 pod-environment bugs there recur the moment this model is loaded again.
 
 ## Global Constraints

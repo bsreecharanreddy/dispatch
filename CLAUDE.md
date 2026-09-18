@@ -45,6 +45,11 @@ updates **in the same commit as the work it describes**.
 `docs/plans/` holds per-phase implementation plans, starting with
 `docs/plans/2026-09-14-phase-0-baseline-plan.md`.
 
+`docs/findings/` holds measured results, **one subfolder per phase**
+(`docs/findings/phase-0/` ... `phase-5b/`), filenames still date-prefixed.
+GPU scripts default their output dir to their own phase's folder; a new
+phase's scripts should do the same rather than write into the top level.
+
 ## Current status
 
 **Phase 0 (baseline) is complete, 2026-09-14**, and merged to `main` via
@@ -56,7 +61,7 @@ and tested (`make check` green, 26 tests). The one real rented-GPU run
 after finding and fixing three real environment bugs along the way (a
 `transformers` version break in DeepSeek's own remote code, a second break
 in the same file one release earlier, and a model-cache-on-the-wrong-disk
-trap). Full account: `docs/findings/2026-09-14-phase-0-baseline-run.md`.
+trap). Full account: `docs/findings/phase-0/2026-09-14-phase-0-baseline-run.md`.
 
 **Phase 1 (custom Triton grouped-GEMM kernel) is complete, 2026-09-15**
 (`make check` green throughout, 73 tests, lint and `mypy --strict`
@@ -81,7 +86,7 @@ the kind of risk the plan's own risk section flagged before the run
 happened. Total GPU
 cost across both paid sessions: **$0.65** ($0.06 kernel correctness +
 $0.59 the measured run). Full account:
-`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
+`docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md`.
 
 **Phase 2 (vLLM benchmark contribution) is complete, 2026-09-15.**
 Neither vLLM's nor SGLang's official MoE benchmark modeled skewed (zipf)
@@ -93,7 +98,7 @@ winning Triton config at 4 of 5 tested batch sizes**. Open PR:
 awaiting maintainer review. Cost: **$0.77**. This phase landed no code
 in `dispatch` itself, only docs — its actual contribution is the
 upstreamed PR. Full account:
-`docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
+`docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md`.
 
 **Phase 3 (multi-GPU expert-parallel serving) is complete, 2026-09-16**,
 merged via PR #3 alongside Phase 2's docs. Real 2x H200 SXM EP over
@@ -106,7 +111,7 @@ under DeepEP's real per-expert token counts (naive wins at every tested
 count on H200; real per-local-expert counts, median 2 max ~20, sit
 below Phase 1's smallest tested point of 16). Cost: **$13.03** of a $25
 cap. Full account:
-`docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md`.
+`docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-run.md`.
 
 **Phase 4 (disaggregated prefill/decode) is complete, 2026-09-17**,
 merged via PR #4. Continuous-batching prefill/decode workers across two
@@ -118,10 +123,10 @@ result was mixed, not clean**: disaggregated TTFT beats co-located at
 concurrency 4 (0.46s vs 1.12s) but loses at concurrency 8 (0.98s vs
 0.70s) -- most likely a kernel-warmup confound, reported as genuinely
 inconclusive. Cost: **$10.94** of a $40 cap. Full account:
-`docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+`docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
 
-**Phase 5a (int8 weight-only quantization) is complete, 2026-09-17**, on
-its own branch (`phase-5a-quantization`), PR pending. Self-computed,
+**Phase 5a (int8 weight-only quantization) is complete, 2026-09-17**, merged
+to `main` via PR #5. Self-computed,
 per-output-channel int8 quantization extending the Triton kernel itself
 (not sourced from bitsandbytes/AWQ). Kernel-level correctness gate
 passed on a real L40 (15/15 int8, 25/25 bf16, both first-time on this
@@ -138,7 +143,31 @@ reduction, perfect model-level top-1/mutual-top-k agreement at every
 tested position. Cost: **$1.95** of a $5 cap, including two RunPod
 Community Cloud pods that hit a real host-level GPU passthrough bug
 before a Secure Cloud pod worked. Full account:
-`docs/findings/2026-09-17-phase-5a-quantization-run.md`.
+`docs/findings/phase-5a/2026-09-17-phase-5a-quantization-run.md`.
+
+**Phase 5b (speculative decoding) is complete, 2026-09-18**, PR #6 open on
+`phase-5b-speculative-decoding`. A shared propose/verify/accept/rollback
+loop with two drafters (a 7B draft model, and model-free prompt-lookup) on
+top of Phase 5a's int8 target, with an independent plain-greedy oracle for
+the baseline. The first GPU session's numbers were withdrawn by the final
+review (degenerate all-token-0 baseline); this phase's second session
+root-caused it: `transformers==5.17.0` leaves DeepSeek's remote-code RoPE
+`inv_freq` buffer uninitialized after `from_pretrained`, poisoning
+attention with NaN on GPU. `fix_rope_inv_freq()` now runs inside
+`load_model` for every caller. Real re-run on an A40, checked against the
+baseline at every k: baseline 25.18 tok/s; **only prompt-lookup beats it**
+(34.4-50.9 tok/s across k=1-8; draft-model is below baseline at every k,
+19.6-23.0). **Not every config is byte-exact against the baseline** -- in
+the 8-config sweep draft-model matched in 13 of 16 (prompt, k)
+combinations and prompt-lookup in 9 of 16, and the same k=4 prompt-lookup
+config matched 2/4 prompts in one process and 3/4 in another. Root cause,
+confirmed by two GPU probes: a genuine near-tied logit under the int8
+kernel's floating-point precision, not a logic bug in the loop. **Open
+question, deliberately not audited:** Phase 5a's own "perfect top-1/top-k
+agreement" claim used this same kernel and a single-run check that could
+not see this. Cost: **$12.26** across both sessions, against a $10 cap
+that was exceeded on one pod and raised to $20 with disclosure. Full
+account: `docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
 
 ## One governing principle
 
@@ -208,6 +237,18 @@ to how GPU rental actually works:
 - **Spin up, run the measured session, capture the evidence, tear down
   immediately.** Never leave a rented GPU idle between sessions.
 - **Cost per run is measured and reported**, same as every other number.
+- **Never leave a pod running across an unbounded wait** (a question to the
+  user, a background task with no deadline). Phase 5b's original $10 cap
+  was exceeded on exactly this: one pod left running while waiting on a
+  reply. Stop it first, restart on the answer.
+- **Pull every evidence file off the pod before `stop`, not after.** The
+  repo clone lived outside the persistent mount (`/workspace`) and did
+  not survive a stop/start; only the JSONs whose contents had already
+  been printed to captured stdout could be recovered.
+- **A stopped pod may be unrestartable** ("not enough free GPUs on the
+  host machine") -- hit on three separate pods in Phase 5b (one started
+  on a third attempt, two never did). Treat `stop` as potentially final
+  for that host's disk.
 
 GPU provisioning lives in `scripts/gpu/` as lightweight scripts calling
 provider APIs directly — not Terraform. RunPod/Vast.ai's Terraform
