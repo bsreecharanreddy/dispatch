@@ -21,7 +21,7 @@ import torch
 from dispatch.benchmark.harness import load_model
 from dispatch.benchmark.metrics import TokenTimings, summarize
 from dispatch.kernels.backends import resolve_quantized_backend
-from dispatch.kernels.integration import patch_moe_infer_quantized
+from dispatch.kernels.integration import fix_rope_inv_freq, patch_moe_infer_quantized
 from dispatch.speculative.decode import plain_greedy_generate, speculative_generate
 from dispatch.speculative.drafters import Drafter, DraftModelDrafter, PromptLookupDrafter
 from dispatch.speculative.reference import (
@@ -52,14 +52,17 @@ def build_drafter(
     if drafter_name == "prompt-lookup":
         return PromptLookupDrafter(ngram_size=prompt_lookup_ngram_size)
     if drafter_name == "draft-model":
-        # sdpa, not this project's usual implicit default (eager): under
-        # transformers==5.17.0, DeepSeek's remote code's eager masking path
-        # (deprecated `_prepare_4d_causal_attention_mask`) produces all-NaN
-        # logits for an unpadded single-sequence input; sdpa's `is_causal`
-        # fast path sidesteps that construction entirely and is unaffected.
+        # sdpa over this project's usual implicit default (eager): a
+        # reasonable, well-supported choice on its own merits. NOT a fix
+        # for anything specific -- an earlier round of this investigation
+        # attributed a real/fake distinction to eager-vs-sdpa that
+        # fix_rope_inv_freq below has since superseded (see its docstring
+        # and the runbook's root-cause section): the actual bug reproduced
+        # under every attn_implementation tested, sdpa included.
         draft_model, _ = load_model(
             draft_model_name, device=device, dtype=dtype, attn_implementation="sdpa"
         )
+        fix_rope_inv_freq(draft_model)
         return DraftModelDrafter(draft_model)
     raise ValueError(f"unknown drafter {drafter_name!r}; expected one of {DRAFTERS}")
 
@@ -82,8 +85,7 @@ def run_speculative_bench(  # noqa: PLR0913 -- each of these is an independent, 
     lengths, the first repetition's generated tokens per prompt (greedy
     decoding is deterministic, so later repetitions would be identical),
     and how many MoE layers were patched."""
-    # sdpa -- see build_drafter's comment above; same NaN-logits bug applies
-    # to the target model's own eager masking path.
+    # sdpa -- see build_drafter's comment above.
     model, tokenizer = load_model(
         model_name,
         device=device,
@@ -91,6 +93,14 @@ def run_speculative_bench(  # noqa: PLR0913 -- each of these is an independent, 
         trust_remote_code=trust_remote_code,
         attn_implementation="sdpa",
     )
+    # The actual fix for this phase's degenerate-baseline finding (C1):
+    # transformers==5.17.0's model loading leaves DeepSeek's remote code's
+    # RoPE inv_freq buffer as uninitialized memory instead of its real
+    # computed value, poisoning every attention layer's output with NaN
+    # from the very first forward pass -- see fix_rope_inv_freq's
+    # docstring for the full mechanism and how this was found (a real GPU
+    # session's layer-by-layer isolation, not guesswork).
+    fix_rope_inv_freq(model)
     moe_layers_patched = patch_moe_infer_quantized(model, resolve_quantized_backend())
     if moe_layers_patched == 0:
         raise RuntimeError(

@@ -2,11 +2,18 @@
 each MoE layer's `moe_infer` -- the inference-time routed-expert method of
 DeepSeek's remote-code DeepseekMoE (modeling_deepseek.py). The gate,
 attention, and shared experts stay DeepSeek's own code.
+
+Also carries `fix_rope_inv_freq`, an unrelated but similarly-shaped
+after-load repair: transformers>=5.17.0's model-loading path leaves
+DeepSeek's remote code's rotary-embedding `inv_freq` buffer as
+uninitialized memory rather than the value its own __init__ computes (see
+that function's docstring for the full mechanism and how it was found).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from typing import cast
 
 import torch
 
@@ -81,6 +88,50 @@ def patch_moe_infer_quantized(
         )
         patched += 1
     return patched
+
+
+def fix_rope_inv_freq(model: torch.nn.Module) -> int:
+    """Returns how many rotary-embedding buffers were fixed, for the
+    caller to check.
+
+    transformers==5.17.0's `from_pretrained` leaves DeepSeek's remote
+    code's `inv_freq` buffer -- computed fresh in
+    `DeepseekRotaryEmbedding.__init__` from `1/base**(i/dim)`, and marked
+    `persistent=False` because it is never meant to be part of a
+    checkpoint's state_dict -- as uninitialized memory instead of that
+    computed value. Found live on a real GPU session (Phase 5b): the
+    corruption is already present immediately after `from_pretrained`
+    returns, before any `.to(device)` call, so it is not a GPU/CUDA
+    numerics issue despite only manifesting as NaN once a forward pass
+    actually runs on GPU (a CPU forward pass reads the same garbage
+    `inv_freq` and still applies rotary embeddings with it, but generates
+    real, non-NaN, wrong-content output instead -- something about the
+    GPU path additionally propagates it to NaN). Every attention layer's
+    rotary embedding gets its own `inv_freq`, so this must run once per
+    loaded model, after `load_model` returns, before any forward pass.
+
+    Discovered and matched via duck typing (`inv_freq`/`dim`/`base`
+    attributes) rather than a hardcoded module path, matching this file's
+    `moe_infer` discovery -- the same fix applies to any transformers
+    remote-code model built on the same Llama-derived rotary embedding
+    class (DeepSeek's is a direct, `# Copied from` derivative)."""
+    fixed = 0
+    for module in model.modules():
+        if not (hasattr(module, "inv_freq") and hasattr(module, "dim") and hasattr(module, "base")):
+            continue
+        dim = cast(int, module.dim)
+        base = cast(int, module.base)
+        inv_freq = cast(torch.Tensor, module.inv_freq)
+        correct_inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+        module.inv_freq = correct_inv_freq.to(inv_freq.device)
+        if hasattr(module, "max_seq_len_cached"):
+            # Forces the next forward call to rebuild cos_cached/sin_cached
+            # from the now-correct inv_freq -- they were derived from the
+            # broken buffer and are just as wrong. nn.Module's __setattr__
+            # stub types this plain int attribute as Tensor | Module.
+            module.max_seq_len_cached = None  # type: ignore[assignment]
+        fixed += 1
+    return fixed
 
 
 def _free_expert_weights(experts: torch.nn.ModuleList) -> None:

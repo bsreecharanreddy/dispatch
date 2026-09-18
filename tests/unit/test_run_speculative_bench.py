@@ -65,12 +65,14 @@ def test_build_drafter_prompt_lookup_returns_a_prompt_lookup_drafter() -> None:
 
 def test_build_drafter_draft_model_loads_and_wraps_it(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_kwargs: dict[str, object] = {}
+    fixed_models: list[object] = []
 
     def fake_load_model(*args: object, **kwargs: object) -> tuple[str, str]:
         captured_kwargs.update(kwargs)
         return "the-model", "the-tokenizer"
 
     monkeypatch.setattr(run_speculative_bench_module, "load_model", fake_load_model)
+    monkeypatch.setattr(run_speculative_bench_module, "fix_rope_inv_freq", fixed_models.append)
 
     drafter = build_drafter(
         "draft-model",
@@ -83,8 +85,10 @@ def test_build_drafter_draft_model_loads_and_wraps_it(monkeypatch: pytest.Monkey
     assert isinstance(drafter, DraftModelDrafter)
     model: object = drafter.model  # load_model is monkeypatched to return a plain str here
     assert model == "the-model"
-    # sdpa avoids the all-NaN-logits eager-masking bug under transformers==5.17.0.
     assert captured_kwargs["attn_implementation"] == "sdpa"
+    # fix_rope_inv_freq (the real fix for this phase's degenerate-baseline
+    # finding) must run on the draft model too, not just the target.
+    assert fixed_models == ["the-model"]
 
 
 def test_build_drafter_rejects_an_unknown_name() -> None:

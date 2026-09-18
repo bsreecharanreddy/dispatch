@@ -14,7 +14,11 @@ import pytest
 import torch
 
 from dispatch.kernels import integration as integration_module
-from dispatch.kernels.integration import patch_moe_infer, patch_moe_infer_quantized
+from dispatch.kernels.integration import (
+    fix_rope_inv_freq,
+    patch_moe_infer,
+    patch_moe_infer_quantized,
+)
 from dispatch.kernels.moe_forward import stack_expert_weights, torch_grouped_matmul
 from dispatch.kernels.quantization import (
     dequantize_int8,
@@ -197,3 +201,67 @@ def test_patch_quantized_rejects_experts_that_are_not_a_module_list() -> None:
 
     with pytest.raises(TypeError, match="ModuleList"):
         patch_moe_infer_quantized(Odd(), torch_grouped_matmul_dequant)
+
+
+class _FakeRotaryEmbedding(torch.nn.Module):
+    """Duck-types DeepseekRotaryEmbedding's shape (inv_freq/dim/base/
+    max_seq_len_cached) without any of its real cos/sin cache machinery --
+    fix_rope_inv_freq discovers and fixes modules by that shape alone."""
+
+    def __init__(self, dim: int, base: int, corrupted_inv_freq: torch.Tensor) -> None:
+        super().__init__()
+        self.dim = dim
+        self.base = base
+        self.register_buffer("inv_freq", corrupted_inv_freq, persistent=False)
+        self.max_seq_len_cached = 11  # a real forward call would have set this
+
+
+class _FakeAttention(torch.nn.Module):
+    def __init__(self, rotary_emb: _FakeRotaryEmbedding) -> None:
+        super().__init__()
+        self.rotary_emb = rotary_emb
+
+
+def _expected_inv_freq(dim: int, base: int) -> torch.Tensor:
+    return 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+
+
+def test_fix_rope_inv_freq_recomputes_a_corrupted_buffer() -> None:
+    dim, base = 8, 10000
+    garbage = torch.tensor([float("nan"), 0.0, 0.0, 0.0])
+    rotary = _FakeRotaryEmbedding(dim, base, garbage)
+    model = _FakeAttention(rotary)
+
+    fixed = fix_rope_inv_freq(model)
+
+    assert fixed == 1
+    assert torch.allclose(cast(torch.Tensor, rotary.inv_freq), _expected_inv_freq(dim, base))
+    assert rotary.max_seq_len_cached is None
+
+
+def test_fix_rope_inv_freq_fixes_every_layer_found() -> None:
+    class ManyLayers(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.layers = torch.nn.ModuleList(
+                [_FakeAttention(_FakeRotaryEmbedding(8, 10000, torch.zeros(4))) for _ in range(3)]
+            )
+
+    model = ManyLayers()
+
+    fixed = fix_rope_inv_freq(model)
+
+    assert fixed == 3
+    for module in model.layers:
+        layer = cast(_FakeAttention, module)
+        assert torch.allclose(
+            cast(torch.Tensor, layer.rotary_emb.inv_freq), _expected_inv_freq(8, 10000)
+        )
+
+
+def test_fix_rope_inv_freq_ignores_modules_without_the_rope_shape() -> None:
+    model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
+
+    fixed = fix_rope_inv_freq(model)
+
+    assert fixed == 0
