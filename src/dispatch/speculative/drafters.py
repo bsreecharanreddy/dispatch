@@ -77,6 +77,12 @@ class DraftModelDrafter:
     def propose(self, token_ids: torch.Tensor, num_tokens: int) -> torch.Tensor:
         if num_tokens <= 0:
             return token_ids.new_empty((1, 0))
+        cache_was_empty = self.past_key_values is None
+        prior_length = (
+            self.past_key_values.get_seq_length()
+            if self.past_key_values is not None and hasattr(self.past_key_values, "get_seq_length")
+            else 0
+        )
         next_input = token_ids if self.past_key_values is None else token_ids[:, -1:]
         proposed: list[torch.Tensor] = []
         with torch.no_grad():
@@ -88,7 +94,7 @@ class DraftModelDrafter:
                 next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
                 proposed.append(next_token)
                 next_input = next_token
-            # on_accepted's crop(rejected_len) assumes every proposed
+            # on_accepted's crop(-rejected_len) assumes every proposed
             # candidate is cache-resident (matching the target's own
             # crop formula in decode.py exactly) -- without this call the
             # loop above would leave the very last candidate un-cached,
@@ -97,6 +103,25 @@ class DraftModelDrafter:
                 input_ids=next_input, past_key_values=self.past_key_values, use_cache=True
             )
             self.past_key_values = outputs.past_key_values
+        assert self.past_key_values is not None  # use_cache=True guarantees this
+        if hasattr(self.past_key_values, "get_seq_length"):
+            # After this call, the cache must hold exactly the fed history
+            # plus every proposed candidate -- this class's own docstring
+            # and tests promise "cache ends up holding the prompt plus
+            # BOTH candidates", not just the last one. A silent drift here
+            # would desync on_accepted's crop(-rejected_len) on the next
+            # round without ever crashing (finding I3, final review).
+            expected_length = (
+                token_ids.shape[1] + num_tokens
+                if cache_was_empty
+                else prior_length + num_tokens + 1
+            )
+            cached_length = self.past_key_values.get_seq_length()
+            assert cached_length == expected_length, (
+                f"cache-lag invariant violated in DraftModelDrafter.propose: cache holds "
+                f"{cached_length} tokens, expected {expected_length} -- see the phase's "
+                "final review, finding I3"
+            )
         return torch.cat(proposed, dim=1)
 
     def on_accepted(self, accepted_len: int, rejected_len: int) -> None:

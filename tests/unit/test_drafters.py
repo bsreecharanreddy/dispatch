@@ -93,6 +93,14 @@ class _FakeCache:
         # (e.g., crop(-2) removes the last 2 tokens).
         self.length += tokens_to_remove
 
+    def get_seq_length(self) -> int:
+        # Real transformers.Cache objects implement this; exercising it
+        # here (rather than relying on the hasattr guard to skip it) is
+        # what makes DraftModelDrafter.propose's cache-lag assertion
+        # (finding I3, final review) actually run against these CPU-only
+        # tests.
+        return self.length
+
 
 class _FakeOutputs:
     def __init__(self, logits: torch.Tensor, past_key_values: _FakeCache) -> None:
@@ -199,6 +207,9 @@ class _FakeTrackingCache:
         if tokens_to_remove == 0:
             return
         del self.tokens[tokens_to_remove:]
+
+    def get_seq_length(self) -> int:
+        return len(self.tokens)
 
 
 class _FakeTrackingOutputs:

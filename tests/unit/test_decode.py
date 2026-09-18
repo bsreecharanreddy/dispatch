@@ -12,12 +12,22 @@ from __future__ import annotations
 
 import pytest
 import torch
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from dispatch.benchmark.harness import load_model
-from dispatch.speculative.decode import run_speculative_rounds, speculative_generate
-from dispatch.speculative.drafters import PromptLookupDrafter
+from dispatch.speculative.decode import (
+    plain_greedy_generate,
+    run_speculative_rounds,
+    speculative_generate,
+)
+from dispatch.speculative.drafters import DraftModelDrafter, PromptLookupDrafter
 
 VOCAB_SIZE = 16
+
+
+class _FakeBatchEncoding(dict):  # type: ignore[type-arg]
+    def to(self, device: str) -> _FakeBatchEncoding:
+        return self
 
 
 class _FakeCache:
@@ -28,6 +38,13 @@ class _FakeCache:
         # transformers>=5.17.0 uses negative integers to remove tokens
         # (e.g., crop(-2) removes the last 2 tokens)
         self.length += tokens_to_remove
+
+    def get_seq_length(self) -> int:
+        # Real transformers.Cache objects implement this; exercising it here
+        # (rather than relying on the hasattr guard to skip it) is what
+        # makes run_speculative_rounds's cache-lag assertion (finding I3,
+        # final review) actually run against these CPU-only tests.
+        return self.length
 
 
 class _FakeOutputs:
@@ -175,10 +192,6 @@ def test_cache_length_invariant_holds_after_multiple_rejecting_rounds() -> None:
 
 
 def test_speculative_generate_matches_plain_decode_via_a_fake_tokenizer() -> None:
-    class _FakeBatchEncoding(dict):  # type: ignore[type-arg]
-        def to(self, device: str) -> _FakeBatchEncoding:
-            return self
-
     class _FakeTokenizer:
         eos_token_id = 999
 
@@ -201,6 +214,25 @@ def test_speculative_generate_matches_plain_decode_via_a_fake_tokenizer() -> Non
     # Round 2 (room=1, k=1): the 1 candidate accepted, no room left for a
     # bonus = 1 token emitted. accepted_lengths = (2, 1), summing to 3.
     assert sum(accepted_lengths) == 3
+
+
+def test_plain_greedy_generate_matches_the_closed_form_continuation() -> None:
+    class _FakeTokenizer:
+        eos_token_id = 999
+
+        def __call__(self, prompt: str, return_tensors: str) -> _FakeBatchEncoding:
+            return _FakeBatchEncoding(input_ids=torch.tensor([[3, 4, 5]]))
+
+    timing, generated = plain_greedy_generate(
+        _FakeIncrementModel(),  # type: ignore[arg-type]
+        _FakeTokenizer(),  # type: ignore[arg-type]
+        "prompt",
+        max_new_tokens=4,
+    )
+
+    assert list(generated) == _expected_continuation([3, 4, 5], 4)
+    assert timing.generated_token_count == 4
+    assert timing.prompt_token_count == 3
 
 
 @pytest.mark.slow
@@ -231,6 +263,66 @@ def test_speculative_generate_matches_plain_greedy_decode_on_a_real_tiny_model()
         model,
         tokenizer,
         PromptLookupDrafter(ngram_size=3),
+        prompt,
+        num_speculative_tokens=4,
+        max_new_tokens=max_new_tokens,
+    )
+
+    assert list(speculative_ids) == plain_ids
+
+
+def _plain_greedy_reference(
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizerBase,
+    prompt: str,
+    max_new_tokens: int,
+) -> list[int]:
+    """Factors out the same manual plain-greedy loop
+    test_speculative_generate_matches_plain_greedy_decode_on_a_real_tiny_model
+    above hand-rolls, so the new DraftModelDrafter end-to-end test below can
+    reuse it rather than duplicating the loop body a third time (the other
+    two being here and decode.py's own plain_greedy_generate -- deliberately
+    not reused directly, since that would make this test's reference no
+    longer independent of the code under test)."""
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+    plain_ids: list[int] = []
+    past_key_values = None
+    next_input = input_ids
+    with torch.no_grad():
+        for _ in range(max_new_tokens):
+            outputs = model(input_ids=next_input, past_key_values=past_key_values, use_cache=True)
+            past_key_values = outputs.past_key_values
+            next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+            plain_ids.append(int(next_token.item()))
+            next_input = next_token
+    return plain_ids
+
+
+@pytest.mark.slow
+def test_speculative_generate_with_draft_model_drafter_matches_plain_greedy_decode() -> None:
+    """DraftModelDrafter has never been tested end-to-end inside
+    run_speculative_rounds against a real model, real tokenizer, and a real
+    transformers.Cache -- only in isolation against fake caches
+    (test_drafters.py). Given this branch's own history (DraftModelDrafter
+    carried two real Critical bugs, both caught only by hand-tracing, not
+    by its own given tests), and given the GPU session's own correctness
+    gate -- the only thing that WAS exercising this exact combination for
+    real -- turned out to be structurally non-discriminating (finding C2,
+    final review: the gate compared against a baseline generated by this
+    same shared loop), this closes a real, now-urgent coverage gap. Uses a
+    second, independently-loaded copy of the same tiny model as the draft
+    model, satisfying the design doc's shared-vocab requirement trivially."""
+    model, tokenizer = load_model("hf-internal-testing/tiny-random-gpt2")
+    draft_model, _ = load_model("hf-internal-testing/tiny-random-gpt2")
+    prompt = "the quick brown fox jumps over the lazy dog"
+    max_new_tokens = 8
+
+    plain_ids = _plain_greedy_reference(model, tokenizer, prompt, max_new_tokens)
+
+    _, _, speculative_ids = speculative_generate(
+        model,
+        tokenizer,
+        DraftModelDrafter(draft_model),
         prompt,
         num_speculative_tokens=4,
         max_new_tokens=max_new_tokens,

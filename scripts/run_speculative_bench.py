@@ -22,7 +22,7 @@ from dispatch.benchmark.harness import load_model
 from dispatch.benchmark.metrics import TokenTimings, summarize
 from dispatch.kernels.backends import resolve_quantized_backend
 from dispatch.kernels.integration import patch_moe_infer_quantized
-from dispatch.speculative.decode import speculative_generate
+from dispatch.speculative.decode import plain_greedy_generate, speculative_generate
 from dispatch.speculative.drafters import Drafter, DraftModelDrafter, PromptLookupDrafter
 from dispatch.speculative.reference import (
     compare_generated_tokens,
@@ -97,15 +97,25 @@ def run_speculative_bench(  # noqa: PLR0913 -- each of these is an independent, 
     generated_tokens: dict[str, tuple[int, ...]] = {}
     for prompt_index, prompt in enumerate(prompts):
         for repetition in range(repetitions):
-            timing, accepted_lengths, tokens = speculative_generate(
-                model,
-                tokenizer,
-                drafter,
-                prompt,
-                num_speculative_tokens=num_speculative_tokens,
-                max_new_tokens=max_new_tokens,
-                device=device,
-            )
+            if drafter is None:
+                timing, tokens = plain_greedy_generate(
+                    model,
+                    tokenizer,
+                    prompt,
+                    max_new_tokens=max_new_tokens,
+                    device=device,
+                )
+                accepted_lengths: tuple[int, ...] = ()
+            else:
+                timing, accepted_lengths, tokens = speculative_generate(
+                    model,
+                    tokenizer,
+                    drafter,
+                    prompt,
+                    num_speculative_tokens=num_speculative_tokens,
+                    max_new_tokens=max_new_tokens,
+                    device=device,
+                )
             runs.append((timing, accepted_lengths))
             if repetition == 0:
                 generated_tokens[f"prompt_{prompt_index:03d}_tokens"] = tokens

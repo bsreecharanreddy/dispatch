@@ -22,6 +22,58 @@ from dispatch.benchmark.metrics import TokenTimings
 from dispatch.speculative.drafters import Drafter
 
 
+def plain_greedy_generate(  # noqa: PLR0913 -- device/clock_fn are what make this testable
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizerBase,
+    prompt: str,
+    *,
+    max_new_tokens: int = 32,
+    device: str = "cpu",
+    clock_fn: Callable[[], float] = time.perf_counter,
+) -> tuple[TokenTimings, tuple[int, ...]]:
+    """Independent correctness oracle for speculative decoding's
+    --drafter none baseline: a plain, token-by-token greedy decode loop
+    that shares NO code with run_speculative_rounds, so it can actually
+    catch a bug in the shared propose/verify/accept/rollback loop rather
+    than silently agreeing with it (a real gap found by this phase's
+    final whole-branch review -- the baseline was previously generated
+    by run_speculative_rounds itself with drafter=None, making the
+    correctness gate unable in principle to catch a bug in that shared
+    code). Deliberately duplicates harness.generate_with_timings's own
+    loop shape (not reused directly, since that file is reused
+    unmodified elsewhere in this phase and doesn't return token ids)
+    plus token-id capture."""
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    input_ids = inputs["input_ids"]
+    prompt_token_count = int(input_ids.shape[-1])
+    eos_token_id = tokenizer.eos_token_id
+
+    start_time = clock_fn()
+    token_times: list[float] = []
+    generated: list[int] = []
+    past_key_values = None
+    next_input = input_ids
+
+    with torch.no_grad():
+        for _ in range(max_new_tokens):
+            outputs = model(input_ids=next_input, past_key_values=past_key_values, use_cache=True)
+            token_times.append(clock_fn())
+            past_key_values = outputs.past_key_values
+            next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+            token_id = int(next_token.item())
+            generated.append(token_id)
+            next_input = next_token
+            if eos_token_id is not None and token_id == eos_token_id:
+                break
+
+    timing = TokenTimings(
+        start_time=start_time,
+        token_times=tuple(token_times),
+        prompt_token_count=prompt_token_count,
+    )
+    return timing, tuple(generated)
+
+
 @dataclass(frozen=True)
 class SpeculativeRoundsResult:
     """past_key_values is exposed only so tests can assert the
@@ -68,6 +120,23 @@ def run_speculative_rounds(  # noqa: PLR0913 -- each of these is an independent,
             )
             past_key_values = outputs.past_key_values
             assert past_key_values is not None  # use_cache=True guarantees this
+
+            if hasattr(past_key_values, "get_seq_length"):
+                # Immediately after this round's forward call, the cache must
+                # hold exactly the known-token history (token_ids, which
+                # still holds its pre-round value here) plus this round's
+                # num_candidates freshly-proposed-but-not-yet-verified
+                # tokens -- no more, no less. A future change to the
+                # catch-up/cache-update logic above that silently drifts
+                # from this would otherwise produce plausible-looking
+                # garbage instead of a crash (finding I3, final review).
+                cached_length = past_key_values.get_seq_length()
+                expected_length = token_ids.shape[1] + num_candidates
+                assert cached_length == expected_length, (
+                    f"cache-lag invariant violated: cache holds {cached_length} tokens, "
+                    f"expected {expected_length} (this would silently corrupt position "
+                    "encoding on the next round -- see the phase's final review, finding I3)"
+                )
 
             offset = step_input.shape[1] - 1
             target_predictions = outputs.logits[0, offset:, :].argmax(dim=-1)
