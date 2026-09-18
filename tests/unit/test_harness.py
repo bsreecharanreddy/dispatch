@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-import dispatch.benchmark.harness as harness_module
 from dispatch.benchmark.harness import generate_with_timings, load_model
 
 TINY_MODEL = "hf-internal-testing/tiny-random-gpt2"
@@ -82,12 +82,8 @@ def test_load_model_omits_attn_implementation_by_default(
         captured_kwargs.update(kwargs)
         return _FakeLoadedModel()
 
-    monkeypatch.setattr(
-        harness_module.AutoModelForCausalLM, "from_pretrained", fake_from_pretrained
-    )
-    monkeypatch.setattr(
-        harness_module.AutoTokenizer, "from_pretrained", lambda *a, **k: _FakeTokenizer()
-    )
+    monkeypatch.setattr(AutoModelForCausalLM, "from_pretrained", fake_from_pretrained)
+    monkeypatch.setattr(AutoTokenizer, "from_pretrained", lambda *a, **k: _FakeTokenizer())
 
     load_model("some-model")
 
@@ -103,12 +99,8 @@ def test_load_model_forwards_an_explicit_attn_implementation(
         captured_kwargs.update(kwargs)
         return _FakeLoadedModel()
 
-    monkeypatch.setattr(
-        harness_module.AutoModelForCausalLM, "from_pretrained", fake_from_pretrained
-    )
-    monkeypatch.setattr(
-        harness_module.AutoTokenizer, "from_pretrained", lambda *a, **k: _FakeTokenizer()
-    )
+    monkeypatch.setattr(AutoModelForCausalLM, "from_pretrained", fake_from_pretrained)
+    monkeypatch.setattr(AutoTokenizer, "from_pretrained", lambda *a, **k: _FakeTokenizer())
 
     load_model("some-model", attn_implementation="sdpa")
 
