@@ -37,6 +37,11 @@ REPETITION_PROMPT = (
 )
 SPECULATIVE_PROMPTS = [*DEFAULT_PROMPTS, REPETITION_PROMPT]
 DRAFTERS = ("none", "draft-model", "prompt-lookup")
+# Single source of truth: used for both load_model() calls below AND
+# recorded into the results JSON (final-review finding: a benchmark's
+# machine-readable evidence must carry its full config, not just the
+# prose findings doc -- CLAUDE.md's own testing-policy table).
+ATTN_IMPLEMENTATION = "sdpa"
 
 
 def build_drafter(
@@ -56,13 +61,12 @@ def build_drafter(
         # reasonable, well-supported choice on its own merits. NOT a fix
         # for anything specific -- an earlier round of this investigation
         # attributed a real/fake distinction to eager-vs-sdpa that
-        # fix_rope_inv_freq below has since superseded (see its docstring
-        # and the runbook's root-cause section): the actual bug reproduced
-        # under every attn_implementation tested, sdpa included.
+        # fix_rope_inv_freq (applied inside load_model itself, for every
+        # caller) has since superseded: the actual bug reproduced under
+        # every attn_implementation tested, sdpa included.
         draft_model, _ = load_model(
-            draft_model_name, device=device, dtype=dtype, attn_implementation="sdpa"
+            draft_model_name, device=device, dtype=dtype, attn_implementation=ATTN_IMPLEMENTATION
         )
-        fix_rope_inv_freq(draft_model)
         return DraftModelDrafter(draft_model)
     raise ValueError(f"unknown drafter {drafter_name!r}; expected one of {DRAFTERS}")
 
@@ -80,32 +84,54 @@ def run_speculative_bench(  # noqa: PLR0913 -- each of these is an independent, 
     draft_model_name: str,
     num_speculative_tokens: int,
     prompt_lookup_ngram_size: int,
-) -> tuple[list[tuple[TokenTimings, tuple[int, ...]]], dict[str, tuple[int, ...]], int]:
+) -> tuple[list[tuple[TokenTimings, tuple[int, ...]]], dict[str, tuple[int, ...]], int, int]:
     """Returns the timed runs paired with each run's per-round accepted
     lengths, the first repetition's generated tokens per prompt (greedy
     decoding is deterministic, so later repetitions would be identical),
-    and how many MoE layers were patched."""
+    how many MoE layers were patched, and how many RoPE buffers were
+    fixed."""
     # sdpa -- see build_drafter's comment above.
     model, tokenizer = load_model(
         model_name,
         device=device,
         dtype=dtype,
         trust_remote_code=trust_remote_code,
-        attn_implementation="sdpa",
+        attn_implementation=ATTN_IMPLEMENTATION,
     )
-    # The actual fix for this phase's degenerate-baseline finding (C1):
-    # transformers==5.17.0's model loading leaves DeepSeek's remote code's
-    # RoPE inv_freq buffer as uninitialized memory instead of its real
-    # computed value, poisoning every attention layer's output with NaN
-    # from the very first forward pass -- see fix_rope_inv_freq's
-    # docstring for the full mechanism and how this was found (a real GPU
-    # session's layer-by-layer isolation, not guesswork).
-    fix_rope_inv_freq(model)
+    # load_model already applies this fix internally for every caller
+    # (the actual fix for this phase's degenerate-baseline finding, C1:
+    # transformers==5.17.0's model loading leaves DeepSeek's remote
+    # code's RoPE inv_freq buffer as uninitialized memory instead of its
+    # real computed value, poisoning every attention layer's output with
+    # NaN from the very first forward pass -- see fix_rope_inv_freq's own
+    # docstring for the full mechanism). This second, idempotent call
+    # exists only to capture the count for this script's own results
+    # JSON and to guard against silent regression: DeepSeekMoE always has
+    # a rotary embedding per attention layer, so 0 here means the
+    # duck-typed shape stopped matching (e.g. a future transformers
+    # release changing DeepSeek's remote code again) and this run would
+    # silently regress to the degenerate baseline this phase already
+    # spent a session root-causing.
+    rope_buffers_fixed = fix_rope_inv_freq(model)
     moe_layers_patched = patch_moe_infer_quantized(model, resolve_quantized_backend())
+    # Order matters for a model with neither shape (e.g. a plain GPT-2
+    # used to test this guard in isolation): the MoE guard's existing
+    # contract ("a kernel run that patches no layers refuses to run,"
+    # CLAUDE.md's testing policy) takes priority over the newer rope
+    # guard below, which exists for a real target that has MoE layers
+    # but somehow no rotary embeddings -- a structurally inconsistent
+    # state for any real decoder-only transformer, not a state this
+    # guard order can ever hide for DeepSeekMoE-16B itself.
     if moe_layers_patched == 0:
         raise RuntimeError(
             f"quantized target patched no MoE layers: {model_name} has no moe_infer to "
             "replace, so this run would time the stock model under the quantized kernel's name"
+        )
+    if rope_buffers_fixed == 0:
+        raise RuntimeError(
+            f"fixed no RoPE buffers: {model_name} has no rotary embedding matching "
+            "fix_rope_inv_freq's duck-typed shape, so this run risks the degenerate-baseline "
+            "bug this phase root-caused (see fix_rope_inv_freq's docstring)"
         )
 
     drafter = build_drafter(
@@ -143,7 +169,7 @@ def run_speculative_bench(  # noqa: PLR0913 -- each of these is an independent, 
             if repetition == 0:
                 generated_tokens[f"prompt_{prompt_index:03d}_tokens"] = tokens
 
-    return runs, generated_tokens, moe_layers_patched
+    return runs, generated_tokens, moe_layers_patched, rope_buffers_fixed
 
 
 def _acceptance_rate(
@@ -180,7 +206,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     dtype: torch.dtype = getattr(torch, args.dtype)
-    runs, generated_tokens, moe_layers_patched = run_speculative_bench(
+    runs, generated_tokens, moe_layers_patched, rope_buffers_fixed = run_speculative_bench(
         args.model_name,
         device=args.device,
         dtype=dtype,
@@ -222,6 +248,8 @@ def main(argv: list[str] | None = None) -> None:
                 "num_speculative_tokens": args.num_speculative_tokens,
                 "prompt_lookup_ngram_size": args.prompt_lookup_ngram_size,
                 "moe_layers_patched": moe_layers_patched,
+                "rope_buffers_fixed": rope_buffers_fixed,
+                "attn_implementation": ATTN_IMPLEMENTATION,
                 "acceptance_rate": acceptance_rate,
                 **asdict(summary),
                 "token_match": comparison,

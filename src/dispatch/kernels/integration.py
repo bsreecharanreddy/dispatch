@@ -108,7 +108,11 @@ def fix_rope_inv_freq(model: torch.nn.Module) -> int:
     real, non-NaN, wrong-content output instead -- something about the
     GPU path additionally propagates it to NaN). Every attention layer's
     rotary embedding gets its own `inv_freq`, so this must run once per
-    loaded model, after `load_model` returns, before any forward pass.
+    loaded model, before any forward pass -- `dispatch.benchmark.harness.
+    load_model` calls this unconditionally on every model it loads, so
+    callers going through `load_model` get it for free; call it again
+    directly only to capture its return count (as `scripts/
+    run_speculative_bench.py` does, to guard against silent regression).
 
     Discovered and matched via duck typing (`inv_freq`/`dim`/`base`
     attributes) rather than a hardcoded module path, matching this file's

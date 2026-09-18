@@ -29,10 +29,10 @@ FAKE_TOKENS: dict[str, tuple[int, ...]] = {"prompt_000_tokens": (1, 2, 3)}
 
 
 def _fake_run_speculative_bench(
-    tokens: dict[str, tuple[int, ...]], moe_layers_patched: int
+    tokens: dict[str, tuple[int, ...]], moe_layers_patched: int, rope_buffers_fixed: int = 27
 ) -> object:
-    def fake(model_name: str, **kwargs: object) -> tuple[list[object], dict, int]:  # type: ignore[type-arg]
-        return [(object(), (2, 1))], tokens, moe_layers_patched
+    def fake(model_name: str, **kwargs: object) -> tuple[list[object], dict, int, int]:  # type: ignore[type-arg]
+        return [(object(), (2, 1))], tokens, moe_layers_patched, rope_buffers_fixed
 
     return fake
 
@@ -65,14 +65,12 @@ def test_build_drafter_prompt_lookup_returns_a_prompt_lookup_drafter() -> None:
 
 def test_build_drafter_draft_model_loads_and_wraps_it(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_kwargs: dict[str, object] = {}
-    fixed_models: list[object] = []
 
     def fake_load_model(*args: object, **kwargs: object) -> tuple[str, str]:
         captured_kwargs.update(kwargs)
         return "the-model", "the-tokenizer"
 
     monkeypatch.setattr(run_speculative_bench_module, "load_model", fake_load_model)
-    monkeypatch.setattr(run_speculative_bench_module, "fix_rope_inv_freq", fixed_models.append)
 
     drafter = build_drafter(
         "draft-model",
@@ -86,9 +84,10 @@ def test_build_drafter_draft_model_loads_and_wraps_it(monkeypatch: pytest.Monkey
     model: object = drafter.model  # load_model is monkeypatched to return a plain str here
     assert model == "the-model"
     assert captured_kwargs["attn_implementation"] == "sdpa"
-    # fix_rope_inv_freq (the real fix for this phase's degenerate-baseline
-    # finding) must run on the draft model too, not just the target.
-    assert fixed_models == ["the-model"]
+    # fix_rope_inv_freq itself now runs inside load_model, for every
+    # caller (see test_harness.py) -- not spied on here, since
+    # load_model is mocked out in this test and build_drafter no longer
+    # calls it a second time.
 
 
 def test_build_drafter_rejects_an_unknown_name() -> None:
@@ -127,6 +126,8 @@ def test_main_writes_results_and_generated_tokens(
     assert results["model"] == "tiny/test-model"
     assert results["mean_tokens_per_second"] == 20.0
     assert results["moe_layers_patched"] == 27
+    assert results["rope_buffers_fixed"] == 27
+    assert results["attn_implementation"] == "sdpa"
     assert results["acceptance_rate"] == pytest.approx(
         1.5 / 4
     )  # mean(2, 1) / num_speculative_tokens
