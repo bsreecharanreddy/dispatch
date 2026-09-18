@@ -102,6 +102,14 @@ def run_speculative_rounds(  # noqa: PLR0913 -- each of these is an independent,
     past_key_values = None
     total_new = 0
 
+    if drafter is not None:
+        # A caller building one drafter and reusing it across several
+        # independent generate() calls (e.g. one prompt/repetition loop
+        # benchmarking several configs) must not leak a prior call's KV
+        # cache into this one -- the target's own past_key_values is
+        # already a fresh local None above; the drafter needs the same.
+        drafter.reset()
+
     with torch.no_grad():
         while total_new < max_new_tokens:
             room = max_new_tokens - total_new

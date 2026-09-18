@@ -80,6 +80,10 @@ def test_on_accepted_is_a_no_op() -> None:
     PromptLookupDrafter().on_accepted(accepted_len=2, rejected_len=1)
 
 
+def test_prompt_lookup_reset_is_a_no_op() -> None:
+    PromptLookupDrafter().reset()
+
+
 class _FakeCache:
     """Tracks only a length -- the toy model below never reads cache
     *contents*, only its length, so a cache-rollback bug shows up as a
@@ -187,6 +191,29 @@ def test_propose_with_non_positive_num_tokens_returns_empty_without_calling_the_
 
     assert proposed.shape == (1, 0)
     assert model.call_count == 0
+
+
+def test_reset_clears_the_cache_so_a_reused_drafter_starts_fresh() -> None:
+    """A caller that builds one DraftModelDrafter and reuses it across
+    several independent generate() calls (real usage:
+    run_speculative_bench.py building one drafter outside its
+    prompt/repetition loop) must not leak a prior, unrelated sequence's
+    KV cache into the next call -- the bug this reset() method fixes."""
+    model = _FakeIncrementModel()
+    drafter = DraftModelDrafter(model)  # type: ignore[arg-type]
+    drafter.propose(torch.tensor([[3, 4, 5]]), num_tokens=2)  # seeds the cache, length 5
+    assert drafter.past_key_values is not None
+
+    drafter.reset()
+
+    # A brand new, unrelated 4-token sequence: without reset(), propose()
+    # would treat this as a continuation of the old cache (feeding only
+    # the last token) instead of a fresh sequence (feeding all 4).
+    proposed = drafter.propose(torch.tensor([[9, 10, 11, 12]]), num_tokens=1)
+
+    assert proposed.tolist() == [[13]]
+    assert drafter.past_key_values is not None
+    assert drafter.past_key_values.length == 4 + 1  # type: ignore[attr-defined]
 
 
 class _FakeTrackingCache:

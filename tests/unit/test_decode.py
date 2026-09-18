@@ -78,6 +78,9 @@ class _AlwaysCorrectDrafter:
     def on_accepted(self, accepted_len: int, rejected_len: int) -> None:
         pass
 
+    def reset(self) -> None:
+        pass
+
 
 class _AlwaysWrongDrafter:
     """Proposes a constant offset that can never match _FakeIncrementModel's
@@ -89,6 +92,31 @@ class _AlwaysWrongDrafter:
 
     def on_accepted(self, accepted_len: int, rejected_len: int) -> None:
         pass
+
+    def reset(self) -> None:
+        pass
+
+
+class _ResetTrackingDrafter:
+    """Stateless otherwise, but counts reset() calls -- used to verify
+    run_speculative_rounds resets a reused drafter at the start of every
+    independent call, not just the first (the bug behind a stale,
+    ever-growing drafter cache when one drafter instance is reused across
+    several generate() calls, e.g. a benchmark's own prompt/repetition
+    loop)."""
+
+    def __init__(self) -> None:
+        self.reset_count = 0
+
+    def propose(self, token_ids: torch.Tensor, num_tokens: int) -> torch.Tensor:
+        last = int(token_ids[0, -1])
+        return torch.tensor([[(last + 1 + i) % VOCAB_SIZE for i in range(num_tokens)]])
+
+    def on_accepted(self, accepted_len: int, rejected_len: int) -> None:
+        pass
+
+    def reset(self) -> None:
+        self.reset_count += 1
 
 
 def _expected_continuation(prompt: list[int], num_tokens: int) -> list[int]:
@@ -113,6 +141,36 @@ def test_always_correct_drafter_matches_the_closed_form_continuation() -> None:
     # 2 rounds of k=4, each fully accepted (5 tokens emitted per round: 4
     # candidates + 1 bonus), summing to the 10 requested.
     assert result.accepted_lengths == (4, 4)
+
+
+def test_reuses_the_same_drafter_across_two_independent_calls_resetting_each_time() -> None:
+    """A caller that builds one drafter and reuses it across several
+    independent generate() calls (real usage: run_speculative_bench.py
+    building one DraftModelDrafter outside its prompt/repetition loop)
+    must get a fresh drafter.reset() before every call, not just the
+    first -- otherwise a stateful drafter (DraftModelDrafter) would leak
+    a prior, unrelated sequence's cache into the next call."""
+    drafter = _ResetTrackingDrafter()
+
+    run_speculative_rounds(
+        _FakeIncrementModel(),  # type: ignore[arg-type]
+        drafter,
+        torch.tensor([[3, 4, 5]]),
+        num_speculative_tokens=4,
+        max_new_tokens=10,
+        eos_token_id=None,
+    )
+    assert drafter.reset_count == 1
+
+    run_speculative_rounds(
+        _FakeIncrementModel(),  # type: ignore[arg-type]
+        drafter,
+        torch.tensor([[9, 10, 11]]),
+        num_speculative_tokens=4,
+        max_new_tokens=10,
+        eos_token_id=None,
+    )
+    assert drafter.reset_count == 2
 
 
 def test_always_wrong_drafter_still_matches_the_closed_form_continuation() -> None:

@@ -28,6 +28,13 @@ class Drafter(Protocol):
         own cache can roll it back. A no-op for stateless drafters."""
         ...
 
+    def reset(self) -> None:
+        """Called once at the start of each independent generate() call
+        so a drafter reused across multiple prompts (or repeated runs of
+        the same prompt) starts with no leftover cache from a prior,
+        unrelated sequence. A no-op for stateless drafters."""
+        ...
+
 
 class PromptLookupDrafter:
     """No model, no cache: proposes whatever tokens followed the most
@@ -56,6 +63,9 @@ class PromptLookupDrafter:
         return sequence[match_end : match_end + take].clone().unsqueeze(0)
 
     def on_accepted(self, accepted_len: int, rejected_len: int) -> None:
+        pass
+
+    def reset(self) -> None:
         pass
 
 
@@ -127,3 +137,6 @@ class DraftModelDrafter:
     def on_accepted(self, accepted_len: int, rejected_len: int) -> None:
         if self.past_key_values is not None:
             self.past_key_values.crop(-rejected_len)
+
+    def reset(self) -> None:
+        self.past_key_values = None
