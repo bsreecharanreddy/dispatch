@@ -8,9 +8,18 @@ from __future__ import annotations
 import pytest
 import torch
 
+import dispatch.benchmark.harness as harness_module
 from dispatch.benchmark.harness import generate_with_timings, load_model
 
 TINY_MODEL = "hf-internal-testing/tiny-random-gpt2"
+
+
+class _FakeLoadedModel:
+    def to(self, device: str) -> _FakeLoadedModel:
+        return self
+
+    def eval(self) -> None:  # stub of nn.Module.eval() (train/eval mode), not the builtin
+        pass
 
 
 class _FakeOutputs:
@@ -62,6 +71,48 @@ def test_generate_with_timings_runs_max_new_tokens_steps_without_eos() -> None:
     assert timing.prompt_token_count == 3
     assert timing.start_time == 0.0
     assert timing.token_times == (0.1, 0.2, 0.3)
+
+
+def test_load_model_omits_attn_implementation_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_kwargs: dict[str, object] = {}
+
+    def fake_from_pretrained(model_name: str, **kwargs: object) -> _FakeLoadedModel:
+        captured_kwargs.update(kwargs)
+        return _FakeLoadedModel()
+
+    monkeypatch.setattr(
+        harness_module.AutoModelForCausalLM, "from_pretrained", fake_from_pretrained
+    )
+    monkeypatch.setattr(
+        harness_module.AutoTokenizer, "from_pretrained", lambda *a, **k: _FakeTokenizer()
+    )
+
+    load_model("some-model")
+
+    assert "attn_implementation" not in captured_kwargs
+
+
+def test_load_model_forwards_an_explicit_attn_implementation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_kwargs: dict[str, object] = {}
+
+    def fake_from_pretrained(model_name: str, **kwargs: object) -> _FakeLoadedModel:
+        captured_kwargs.update(kwargs)
+        return _FakeLoadedModel()
+
+    monkeypatch.setattr(
+        harness_module.AutoModelForCausalLM, "from_pretrained", fake_from_pretrained
+    )
+    monkeypatch.setattr(
+        harness_module.AutoTokenizer, "from_pretrained", lambda *a, **k: _FakeTokenizer()
+    )
+
+    load_model("some-model", attn_implementation="sdpa")
+
+    assert captured_kwargs["attn_implementation"] == "sdpa"
 
 
 @pytest.mark.slow

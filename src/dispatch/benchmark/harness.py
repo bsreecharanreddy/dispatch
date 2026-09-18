@@ -26,10 +26,14 @@ def load_model(
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
     trust_remote_code: bool = False,
+    attn_implementation: str | None = None,
 ) -> tuple[PreTrainedModel, PreTrainedTokenizerBase]:
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=trust_remote_code)
+    extra_kwargs = (
+        {} if attn_implementation is None else {"attn_implementation": attn_implementation}
+    )
     model = AutoModelForCausalLM.from_pretrained(
-        model_name, dtype=dtype, trust_remote_code=trust_remote_code
+        model_name, dtype=dtype, trust_remote_code=trust_remote_code, **extra_kwargs
     )
     # torch's Module.to() overloads don't resolve a str device; Module.eval() is untyped.
     model.to(device)  # type: ignore[arg-type]

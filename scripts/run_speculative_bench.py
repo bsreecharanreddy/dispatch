@@ -52,7 +52,14 @@ def build_drafter(
     if drafter_name == "prompt-lookup":
         return PromptLookupDrafter(ngram_size=prompt_lookup_ngram_size)
     if drafter_name == "draft-model":
-        draft_model, _ = load_model(draft_model_name, device=device, dtype=dtype)
+        # sdpa, not this project's usual implicit default (eager): under
+        # transformers==5.17.0, DeepSeek's remote code's eager masking path
+        # (deprecated `_prepare_4d_causal_attention_mask`) produces all-NaN
+        # logits for an unpadded single-sequence input; sdpa's `is_causal`
+        # fast path sidesteps that construction entirely and is unaffected.
+        draft_model, _ = load_model(
+            draft_model_name, device=device, dtype=dtype, attn_implementation="sdpa"
+        )
         return DraftModelDrafter(draft_model)
     raise ValueError(f"unknown drafter {drafter_name!r}; expected one of {DRAFTERS}")
 
@@ -75,8 +82,14 @@ def run_speculative_bench(  # noqa: PLR0913 -- each of these is an independent, 
     lengths, the first repetition's generated tokens per prompt (greedy
     decoding is deterministic, so later repetitions would be identical),
     and how many MoE layers were patched."""
+    # sdpa -- see build_drafter's comment above; same NaN-logits bug applies
+    # to the target model's own eager masking path.
     model, tokenizer = load_model(
-        model_name, device=device, dtype=dtype, trust_remote_code=trust_remote_code
+        model_name,
+        device=device,
+        dtype=dtype,
+        trust_remote_code=trust_remote_code,
+        attn_implementation="sdpa",
     )
     moe_layers_patched = patch_moe_infer_quantized(model, resolve_quantized_backend())
     if moe_layers_patched == 0:
