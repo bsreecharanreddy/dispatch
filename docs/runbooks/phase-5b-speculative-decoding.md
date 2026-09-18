@@ -456,3 +456,28 @@ Budget cap: $10, a ceiling not a target.
 
         uv run python -m scripts.gpu.provision terminate --pod-id <pod_id>
         # confirm terminated via the RunPod dashboard or API (get-pod <pod_id>)
+
+## Session 2 result, 2026-09-18: root cause found, real run completed
+
+The root-cause investigation this runbook's prior addendum called for
+is done. Root cause: `transformers==5.17.0`'s `from_pretrained` leaves
+DeepSeek's remote code's RoPE `inv_freq` buffer (`persistent=False`) as
+uninitialized memory instead of its computed value, poisoning every
+attention layer with NaN on the first GPU forward pass -- present
+before any GPU involvement, independent of attention backend, dtype,
+and GPU architecture (confirmed across 4 pods, 2 architectures, 3 data
+centers). Fixed permanently: `fix_rope_inv_freq()` in
+`src/dispatch/kernels/integration.py` (commit `c5b59df`), called right
+after `load_model()` for both the target and any draft model.
+
+With the fix applied: real baseline, both correctness gates, and the
+full k-sweep (checked at every k, closing the "check every point"
+step above) all ran successfully. One real, root-caused (not
+bug-driven) divergence pattern was found and explained: a near-tied
+logit position under the int8-quantized kernel's actual floating-point
+precision, confirmed by a batch-width probe and a same-process
+determinism probe. Full account, numbers, and the open Phase-5a-audit
+question: `docs/findings/2026-09-18-phase-5b-speculative-decoding-run.md`.
+
+Total cost across both sessions: $12.26 of the (raised, mid-session)
+$20 cap.
