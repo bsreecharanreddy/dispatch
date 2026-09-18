@@ -98,7 +98,7 @@ tokens each, `max_new_tokens=16`:
 | "def fibonacci(n):" | `[185, 300, 565, 291, 2318, 207, 15, 25, 185, 391, 972, 207, 15, 185, 300, 23744]` | **exact match** | **exact match** |
 
 Both configurations matched on every token, every prompt. Full data:
-`docs/findings/2026-09-16-phase-4-single-gpu-reference.json`,
+`docs/findings/phase-4/2026-09-16-phase-4-single-gpu-reference.json`,
 `2026-09-16-phase-4-colocated-gate-results.json`,
 `2026-09-16-phase-4-disaggregated-gate-results.json`.
 
@@ -198,4 +198,4 @@ valuable, and now-complete part) took priority, and once both gates
 passed and one real concurrency reading was in hand per configuration,
 the session stopped rather than spending further budget chasing a clean
 answer to a question the data itself flagged as confounded. Full record:
-`docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-cost.md`.
+`docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-cost.md`.

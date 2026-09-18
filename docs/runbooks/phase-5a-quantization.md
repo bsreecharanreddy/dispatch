@@ -11,7 +11,7 @@ caller. Two Community Cloud pods hit a real host-level GPU bug before a
 Secure Cloud L40 worked. Total cost: **$1.9543** of the $5 cap. Full
 account, including the correctness gate, the three-way measured run, and
 a real bug found and fixed mid-session:
-`docs/findings/2026-09-17-phase-5a-quantization-run.md`.
+`docs/findings/phase-5a/2026-09-17-phase-5a-quantization-run.md`.
 
 1. **Create the pod.** Quoted L40 on Community Cloud at $0.69/hr,
    confirmed with the user before creating anything.

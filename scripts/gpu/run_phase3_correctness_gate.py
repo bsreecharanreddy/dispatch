@@ -1,7 +1,7 @@
 """Phase 3 correctness gate: does DeepEP-backed 2-GPU expert-parallel
 inference on the real DeepSeekMoE-16B model agree with a single-GPU
 reference, at the same top-5/top-1 bar Phase 1 used
-(docs/findings/2026-09-15-phase-1-grouped-gemm-run.md)? Must pass before
+(docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md)? Must pass before
 Task 4's benchmark sweep runs -- an EP run that disagrees with the
 single-GPU reference is not benchmarked, per this project's standing
 "correctness before speed" rule.
@@ -43,7 +43,7 @@ DEFAULT_PROMPTS = [
     "def fibonacci(n):",
 ]
 MODEL_NAME = "deepseek-ai/deepseek-moe-16b-base"
-OUTPUT_DIR = Path("docs/findings")
+OUTPUT_DIR = Path("docs/findings/phase-3")
 SINGLE_GPU_REFERENCE_PATH = OUTPUT_DIR / "2026-09-16-phase-3-single-gpu-reference.safetensors"
 
 

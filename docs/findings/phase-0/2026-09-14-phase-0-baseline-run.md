@@ -104,7 +104,7 @@ prompts x 5 repetitions, 64 max new tokens = 15 runs):
 | Mean tokens/sec | 12.75 |
 
 Full machine-readable record:
-`docs/findings/2026-09-14-phase-0-baseline-results.json` (committed).
+`docs/findings/phase-0/2026-09-14-phase-0-baseline-results.json` (committed).
 
 **The reference logits are not committed.** `.gitignore` excludes
 `*.safetensors` repo-wide, on purpose, from scaffold time: "GPU
@@ -112,7 +112,7 @@ rental / benchmark run artifacts -- raw output belongs in
 `docs/findings/` as a written-up, measured result, not as a committed
 blob." An 11.9MB tensor blob is exactly what that rule means to keep
 out, and this finding doesn't override it. The file exists locally
-(`docs/findings/2026-09-14-phase-0-baseline-reference.safetensors`,
+(`docs/findings/phase-0/2026-09-14-phase-0-baseline-reference.safetensors`,
 produced by this run) but isn't tracked. Phase 1 gets it back by
 re-running `capture_reference_logits` against the same model and the
 same `DEFAULT_PROMPTS` in `scripts/run_baseline.py` -- reproducible by

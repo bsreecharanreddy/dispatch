@@ -4,7 +4,7 @@ Design: `docs/design/2026-09-17-phase-5b-speculative-decoding.md`. Plan:
 `docs/plans/2026-09-17-phase-5b-speculative-decoding-plan.md`. Branch
 `phase-5b-speculative-decoding`. Runbook:
 `docs/runbooks/phase-5b-speculative-decoding.md`. Supersedes
-`docs/findings/2026-09-17-phase-5b-speculative-decoding-run.md` (the
+`docs/findings/phase-5b/2026-09-17-phase-5b-speculative-decoding-run.md` (the
 prior session, whose throughput/correctness numbers were withdrawn by
 that same doc's own final-review correction after its baseline turned
 out to be degenerate).

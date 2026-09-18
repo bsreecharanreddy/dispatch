@@ -146,7 +146,7 @@ Per token count, per backend, for both `zipf` (skewed toward low-index
 experts) and `uniform` routing: mean latency and TFLOP/s, for the whole
 routed MoE layer (`layer`, three grouped GEMMs) and the gate_proj-shaped
 grouped GEMM alone (`gemm`). Full data:
-`docs/findings/2026-09-15-phase-1-kernel-bench-zipf.json` and
+`docs/findings/phase-1/2026-09-15-phase-1-kernel-bench-zipf.json` and
 `-uniform.json` (each includes the run's full config -- GPU, torch/cuda/
 triton versions, block sizes -- alongside every number).
 

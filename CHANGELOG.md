@@ -31,7 +31,7 @@ once a phase's exit criteria are actually met).
   whole-branch review), both fixed before merge. Cost: **$1.95** of a $5
   cap, including two RunPod Community Cloud pods that hit a real
   host-level GPU passthrough bug. Full account:
-  `docs/findings/2026-09-17-phase-5a-quantization-run.md`.
+  `docs/findings/phase-5a/2026-09-17-phase-5a-quantization-run.md`.
 - **Phase 4 (disaggregated prefill/decode) complete**, 2026-09-17
   (`docs/plans/2026-09-16-phase-4-disaggregated-prefill-decode-plan.md`).
   Continuous-batching prefill/decode workers across two real 4-GPU H100
@@ -44,7 +44,7 @@ once a phase's exit criteria are actually met).
   concurrency 8 (0.98s vs 0.70s) — most likely a kernel-warmup confound,
   reported as genuinely inconclusive. Cost: **$10.94** of a $40 cap.
   Full account:
-  `docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+  `docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
 - **Phase 3 (multi-GPU expert-parallel serving) complete**, 2026-09-16
   (`docs/plans/2026-09-15-phase-3-multi-gpu-expert-parallel-serving-plan.md`).
   Real 2x H200 SXM expert-parallel serving over DeepSeek's own DeepEP
@@ -57,7 +57,7 @@ once a phase's exit criteria are actually met).
   wins at every tested count on H200; real per-local-expert counts,
   median 2 max ~20, sit below Phase 1's smallest tested point of 16).
   Cost: **$13.03** of a $25 cap. Full account:
-  `docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md`.
+  `docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-run.md`.
 - **Phase 2 (vLLM benchmark contribution) complete**, 2026-09-15
   (`docs/plans/2026-09-15-phase-2-vllm-benchmark-contribution-plan.md`).
   Neither vLLM's nor SGLang's official MoE benchmark modeled skewed
@@ -68,7 +68,7 @@ once a phase's exit criteria are actually met).
   PR: [vllm-project/vllm#57100](https://github.com/vllm-project/vllm/pull/57100).
   Cost: **$0.77**. This phase landed no code in `dispatch` itself, only
   docs — its actual contribution is the upstreamed PR. Full account:
-  `docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
+  `docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md`.
 - **Phase 1 (custom Triton grouped-GEMM kernel) complete**, 2026-09-15
   (`docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`). Built and
   tested: a CPU-only MoE reference and grouped-GEMM contract, a naive and
@@ -97,7 +97,7 @@ once a phase's exit criteria are actually met).
     run happened), wins 3-8% at 16-128 tokens, then loses by up to 14% at
     512-2048 — a workload-specific result recorded rather than buried.
     Total GPU cost across both sessions: **$0.65**.
-    Full account: `docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
+    Full account: `docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md`.
 - **Phase 0 (baseline) complete**, 2026-09-14
   (`docs/plans/2026-09-14-phase-0-baseline-plan.md`). Built and tested: a
   RunPod REST client and provisioning CLI, a token-by-token-timed
@@ -111,7 +111,7 @@ once a phase's exit criteria are actually met).
   DeepSeek's own remote code, the same break's cousin one release
   earlier, and a model-cache-on-the-wrong-disk trap), none in this
   repo's own code. Full account:
-  `docs/findings/2026-09-14-phase-0-baseline-run.md`.
+  `docs/findings/phase-0/2026-09-14-phase-0-baseline-run.md`.
 - Repo scaffolded: conventions, tooling, and doc structure carried over
   from [almanac](https://github.com/bsreecharanreddy/almanac) and
   [canopica](https://github.com/bsreecharanreddy/canopica) where

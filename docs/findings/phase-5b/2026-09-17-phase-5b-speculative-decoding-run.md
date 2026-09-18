@@ -95,7 +95,7 @@ written.
 Pod `2t6wh9l3okl3gj`, NVIDIA L40, RunPod Secure Cloud, $0.8200/hr, 3000s
 (0.833hr) rented. Confirmed terminated after the session (404 on
 `get-pod` following `delete-pod`'s 204). Full record:
-`docs/findings/2026-09-17-phase-5b-speculative-decoding-cost.md`.
+`docs/findings/phase-5b/2026-09-17-phase-5b-speculative-decoding-cost.md`.
 
 Config held constant across every run below unless noted: model
 `deepseek-ai/deepseek-moe-16b-base`, quantized (int8) target kernel
@@ -299,7 +299,7 @@ the default):
 
 **Actual: $0.6833** (pod `2t6wh9l3okl3gj`, L40, $0.82/hr, 3000s) against
 the **$10 cap** -- **6.83% used**. Source:
-`docs/findings/2026-09-17-phase-5b-speculative-decoding-cost.md`. This
+`docs/findings/phase-5b/2026-09-17-phase-5b-speculative-decoding-cost.md`. This
 dollar figure is not in question -- it is what the session cost, not a
 throughput or correctness claim. Both correctness gates, the three-way
 measured run, and the full 8-run k-sweep all *completed* inside this one

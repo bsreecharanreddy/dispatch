@@ -17,7 +17,7 @@ The headline result is not "DeepEP works." Phase 1 found a real,
 workload-specific crossover: the persistent (cache-aware) kernel ties the
 naive kernel at unbatched single-token decode, wins 3-8% at 16-128
 tokens/expert, and loses by up to 14% at 512-2048 tokens/expert
-(`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`). Cross-GPU EP
+(`docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md`). Cross-GPU EP
 dispatch changes the per-expert token-count distribution each rank
 actually sees -- it is not the same shape as local unbatched decode.
 

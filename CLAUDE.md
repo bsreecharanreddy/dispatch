@@ -56,7 +56,7 @@ and tested (`make check` green, 26 tests). The one real rented-GPU run
 after finding and fixing three real environment bugs along the way (a
 `transformers` version break in DeepSeek's own remote code, a second break
 in the same file one release earlier, and a model-cache-on-the-wrong-disk
-trap). Full account: `docs/findings/2026-09-14-phase-0-baseline-run.md`.
+trap). Full account: `docs/findings/phase-0/2026-09-14-phase-0-baseline-run.md`.
 
 **Phase 1 (custom Triton grouped-GEMM kernel) is complete, 2026-09-15**
 (`make check` green throughout, 73 tests, lint and `mypy --strict`
@@ -81,7 +81,7 @@ the kind of risk the plan's own risk section flagged before the run
 happened. Total GPU
 cost across both paid sessions: **$0.65** ($0.06 kernel correctness +
 $0.59 the measured run). Full account:
-`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
+`docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md`.
 
 **Phase 2 (vLLM benchmark contribution) is complete, 2026-09-15.**
 Neither vLLM's nor SGLang's official MoE benchmark modeled skewed (zipf)
@@ -93,7 +93,7 @@ winning Triton config at 4 of 5 tested batch sizes**. Open PR:
 awaiting maintainer review. Cost: **$0.77**. This phase landed no code
 in `dispatch` itself, only docs — its actual contribution is the
 upstreamed PR. Full account:
-`docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
+`docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md`.
 
 **Phase 3 (multi-GPU expert-parallel serving) is complete, 2026-09-16**,
 merged via PR #3 alongside Phase 2's docs. Real 2x H200 SXM EP over
@@ -106,7 +106,7 @@ under DeepEP's real per-expert token counts (naive wins at every tested
 count on H200; real per-local-expert counts, median 2 max ~20, sit
 below Phase 1's smallest tested point of 16). Cost: **$13.03** of a $25
 cap. Full account:
-`docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md`.
+`docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-run.md`.
 
 **Phase 4 (disaggregated prefill/decode) is complete, 2026-09-17**,
 merged via PR #4. Continuous-batching prefill/decode workers across two
@@ -118,7 +118,7 @@ result was mixed, not clean**: disaggregated TTFT beats co-located at
 concurrency 4 (0.46s vs 1.12s) but loses at concurrency 8 (0.98s vs
 0.70s) -- most likely a kernel-warmup confound, reported as genuinely
 inconclusive. Cost: **$10.94** of a $40 cap. Full account:
-`docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+`docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
 
 **Phase 5a (int8 weight-only quantization) is complete, 2026-09-17**, on
 its own branch (`phase-5a-quantization`), PR pending. Self-computed,
@@ -138,7 +138,7 @@ reduction, perfect model-level top-1/mutual-top-k agreement at every
 tested position. Cost: **$1.95** of a $5 cap, including two RunPod
 Community Cloud pods that hit a real host-level GPU passthrough bug
 before a Secure Cloud pod worked. Full account:
-`docs/findings/2026-09-17-phase-5a-quantization-run.md`.
+`docs/findings/phase-5a/2026-09-17-phase-5a-quantization-run.md`.
 
 ## One governing principle
 

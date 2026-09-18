@@ -25,7 +25,7 @@ of what was planned before real hardware corrected it, not as
 instructions to follow literally. Total cost: $13.03 (docs/findings/
 2026-09-16-phase-3-multi-gpu-ep-cost.md). Full account, including the
 correctness gate result and the measured answer to Phase 3's thesis:
-docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md.
+docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-run.md.
 
 1. Create and wait for the 2-GPU pod:
 
@@ -214,7 +214,7 @@ docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md.
    run the same prompt/seed; gather rank 0's output logits. Compare
    top-5 and top-1 argmax agreement at every position against the
    single-GPU reference, the same bar Phase 1 used
-   (`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`). If agreement
+   (`docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md`). If agreement
    fails, stop -- do not benchmark a wrong result. Record the exact
    agreement measured (perfect, or the first position/token where it
    diverges) in the findings doc either way.

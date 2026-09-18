@@ -83,7 +83,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--max-new-tokens", type=int, default=64)
-    parser.add_argument("--output-dir", type=Path, default=Path("docs/findings"))
+    parser.add_argument("--output-dir", type=Path, default=Path("docs/findings/phase-0"))
     parser.add_argument("--run-label", default=time.strftime("%Y-%m-%d-baseline"))
     parser.add_argument(
         "--moe-kernel", default="none", choices=["none", *BACKENDS, QUANTIZED_BACKEND]

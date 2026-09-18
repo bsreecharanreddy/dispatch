@@ -243,17 +243,17 @@ is the authoritative architecture, phasing, and scope document.
 
 - **Inference / GPU-systems engineering** — the kernel itself
   (`src/dispatch/kernels/grouped_gemm.py`), then
-  [Phase 1's findings doc](docs/findings/2026-09-15-phase-1-grouped-gemm-run.md):
+  [Phase 1's findings doc](docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md):
   a from-scratch Triton kernel proven correct on real hardware before a
   single speed claim was made.
 - **Distributed / multi-GPU systems** — `src/dispatch/kernels/expert_parallel.py`
   and `src/dispatch/serving/`, then
-  [Phase 3's](docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md) and
-  [Phase 4's](docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md)
+  [Phase 3's](docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-run.md) and
+  [Phase 4's](docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md)
   findings docs for two results — one null, one mixed — found by measuring
   on real hardware rather than assumed.
 - **ML infra / open-source contribution** —
-  [Phase 2's findings doc](docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md)
+  [Phase 2's findings doc](docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md)
   and the open [vLLM PR](https://github.com/vllm-project/vllm/pull/57100): a
   real gap found by checking what a production project already ships, not
   duplicating it.

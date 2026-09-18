@@ -60,7 +60,7 @@ it.
 
 **Task 8's real run found three more bugs, all in the environment rather
 than in `dispatch`'s own code** -- see
-`docs/findings/2026-09-14-phase-0-baseline-run.md` for the full account:
+`docs/findings/phase-0/2026-09-14-phase-0-baseline-run.md` for the full account:
 DeepSeek's `trust_remote_code` modeling file calling a `transformers`
 utility (`is_torch_fx_available`) removed entirely by transformers 5.17.0
 (this repo's pinned floor); the same file calling a `Cache` method
@@ -79,13 +79,13 @@ decode, 15 runs (3 prompts x 5 repetitions, 64 max new tokens):
 stock at deploy time), all three failed attempts included since the model
 was already cached locally by the second one. Pod verified `TERMINATED`
 independently after deletion. Full record:
-`docs/findings/2026-09-14-phase-0-baseline-results.json` and
+`docs/findings/phase-0/2026-09-14-phase-0-baseline-results.json` and
 `2026-09-15-phase-0-baseline-cost.md` (both committed). The reference
 logits (`-reference.safetensors`, Phase 1's correctness oracle) are
 **not** committed -- `.gitignore` excludes `*.safetensors` repo-wide by
 design; the file exists locally but Phase 1 regenerates it from
 `capture_reference_logits` rather than relying on a checked-in blob.
-See `docs/findings/2026-09-14-phase-0-baseline-run.md` for the full
+See `docs/findings/phase-0/2026-09-14-phase-0-baseline-run.md` for the full
 account.
 
 ## Phase 1 progress
@@ -116,7 +116,7 @@ clean outcome. One real, non-kernel bug found and fixed: a
 a real device. A mutation check (forcing every tile to read expert 0's
 weights) turned 24/25 tests red, confirmed the revert was clean, and
 reran green -- the suite can fail. Cost: **$0.0606** for 991s of RTX 3090
-rental. Full account: `docs/findings/2026-09-15-phase-1-kernel-correctness.md`.
+rental. Full account: `docs/findings/phase-1/2026-09-15-phase-1-kernel-correctness.md`.
 
 Task 7 adds `dispatch.kernels.backends` (`BACKENDS = ("torch", "naive",
 "persistent")` and `resolve_backend`, which imports the Triton kernel
@@ -184,7 +184,7 @@ before the run happened (unbatched decode gives each expert too few rows
 for L2 tile reuse to matter) -- but wins 3-8% at 16-128 tokens and loses
 by up to 14% at 512-2048, a workload-specific result recorded rather than
 buried. Full account:
-`docs/findings/2026-09-15-phase-1-grouped-gemm-run.md`.
+`docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md`.
 
 **Total Phase 1 GPU cost: $0.65** across both paid sessions ($0.0606
 kernel correctness + $0.5916 the measured run) -- both well under their
@@ -225,7 +225,7 @@ including three real environment issues found and fixed (a failed
 precompiled-wheel install, a local-package-shadowing bug affecting Ray
 workers, and RunPod's proxy-only SSH access for this pod) and every
 deviation from the plan and why:
-`docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`.
+`docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md`.
 
 ## Phase 3 progress
 
@@ -279,7 +279,7 @@ tested point of 16) -- real single-request EP traffic lands close to
 Phase 1's single-token-decode tie, not its 16-128-token win region.
 Both kernels sit near a shared ~0.5ms latency floor at that real scale.
 Full account, including the exact bugs, fixes, and every number:
-`docs/findings/2026-09-16-phase-3-multi-gpu-ep-run.md`.
+`docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-run.md`.
 
 **Total Phase 3 GPU cost: $13.03** of the $25 cap, 2x H200 SXM, 85
 minutes.
@@ -336,7 +336,7 @@ contention). Reported as genuinely inconclusive rather than forced into
 either direction; a warmed-up measurement protocol is the identified
 follow-up, not attempted this session per the standing cost-discipline
 instruction once both correctness gates had passed. Full account:
-`docs/findings/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+`docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
 
 **Total Phase 4 GPU cost: $10.94** of the $40 cap, 4x H100 SXM, 47
 minutes.
@@ -409,7 +409,7 @@ the pod with `hf_transfer` not installed.
 
 **Total Phase 5a GPU cost: $1.9543** of the $5 cap (39.1%), across all
 three pods including both abandoned Community Cloud attempts. Full
-account: `docs/findings/2026-09-17-phase-5a-quantization-run.md`.
+account: `docs/findings/phase-5a/2026-09-17-phase-5a-quantization-run.md`.
 
 ## Phase 5b progress
 
@@ -451,7 +451,7 @@ bug above, not by the shared propose/verify/accept/rollback loop
 session and found correct for every candidate-count case. Full account
 of the fix, the real re-measured baseline, both correctness gates, and
 the full k-sweep (checked at every k this time, closing finding I5):
-`docs/findings/2026-09-18-phase-5b-speculative-decoding-run.md`.
+`docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
 
 **Real, non-degenerate results, 2026-09-18**: baseline 25.18 tok/s;
 draft-model k=4 gate byte-exact on all 4 prompts (23.03 tok/s, 74.5%

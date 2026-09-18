@@ -273,6 +273,6 @@ downgraded to match the expectation.
 
 Against the **$5 cap**: **39.1% used**, all three pods (including both
 abandoned attempts) included. Full records:
-`docs/findings/2026-09-17-phase-5a-community-attempt1-cost.md`,
+`docs/findings/phase-5a/2026-09-17-phase-5a-community-attempt1-cost.md`,
 `2026-09-17-phase-5a-community-attempt2-cost.md`,
 `2026-09-17-phase-5a-quantization-cost.md`.

@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--dtype", choices=["float16", "bfloat16"], default="bfloat16")
     parser.add_argument("--block-m", type=int, default=16)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--output-dir", type=Path, default=Path("docs/findings"))
+    parser.add_argument("--output-dir", type=Path, default=Path("docs/findings/phase-1"))
     parser.add_argument("--run-label", default=time.strftime("%Y-%m-%d-phase-1-kernel-bench"))
     args = parser.parse_args(argv)
 

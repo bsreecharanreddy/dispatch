@@ -477,7 +477,7 @@ bug-driven) divergence pattern was found and explained: a near-tied
 logit position under the int8-quantized kernel's actual floating-point
 precision, confirmed by a batch-width probe and a same-process
 determinism probe. Full account, numbers, and the open Phase-5a-audit
-question: `docs/findings/2026-09-18-phase-5b-speculative-decoding-run.md`.
+question: `docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
 
 Total cost across both sessions: $12.26 of the (raised, mid-session)
 $20 cap.

@@ -97,7 +97,7 @@ phase ports, `_ROUTING_WEIGHTS["zipf"] = 1/i`).
 ```text
 dispatch (this repo):
   docs/plans/2026-09-15-phase-2-vllm-benchmark-contribution-plan.md   # this file
-  docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md              # Task 7
+  docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md              # Task 7
   docs/findings/2026-09-15-phase-2-vllm-benchmark-cost.md             # Task 5 (write_cost_record)
   docs/runbooks/phase-2-vllm-benchmark.md                             # Task 5
   docs/STATUS.md                                                      # Task 7
@@ -819,12 +819,12 @@ into Task 7's findings doc verbatim, not re-derived from memory.
 **Files:**
 
 
-- Create: `docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`
+- Create: `docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md`
 - Modify: `docs/STATUS.md`
 
 - [ ] **Step 1: Write the findings doc**
 
-Cover, in `docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md`: both PR
+Cover, in `docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md`: both PR
 URLs and their state (open / under review / merged / rejected -- whichever
 is true at write time, not assumed); the measured per-batch-size config
 divergence table from Task 6; the actual GPU type, duration, and cost from
@@ -845,7 +845,7 @@ total GPU cost. Set "## Next step" to reflect whatever is actually next
 
 ```bash
 cd /Users/sree/Documents/Projects/dispatch
-git add docs/findings/2026-09-15-phase-2-vllm-benchmark-run.md docs/STATUS.md
+git add docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md docs/STATUS.md
 git commit -m "docs: record Phase 2 vLLM benchmark contribution outcome"
 ```
 
