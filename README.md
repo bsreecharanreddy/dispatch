@@ -22,17 +22,16 @@ result was a null or a mixed one, it's reported that way.
 
 ---
 
-> **Status:** Phases 0-5a merged to `main` across five PRs
+> **Status:** Phases 0-5b merged to `main` across six PRs
 > ([#1](https://github.com/bsreecharanreddy/dispatch/pull/1) Phase 0,
 > [#2](https://github.com/bsreecharanreddy/dispatch/pull/2) Phase 1,
 > [#3](https://github.com/bsreecharanreddy/dispatch/pull/3) Phases 2-3,
 > [#4](https://github.com/bsreecharanreddy/dispatch/pull/4) Phase 4,
-> [#5](https://github.com/bsreecharanreddy/dispatch/pull/5) Phase 5a) —
+> [#5](https://github.com/bsreecharanreddy/dispatch/pull/5) Phase 5a,
+> [#6](https://github.com/bsreecharanreddy/dispatch/pull/6) Phase 5b) —
 > Phase 2 landed as docs only, its actual contribution being the
-> upstreamed vLLM PR below, not a dispatch-repo code change. **Phase 5b
-> (speculative decoding) is complete**, PR
-> [#6](https://github.com/bsreecharanreddy/dispatch/pull/6) open. Full
-> task-by-task record:
+> upstreamed vLLM PR below, not a dispatch-repo code change. Phase 6
+> (final benchmark vs. vLLM/SGLang) is next. Full task-by-task record:
 > [`docs/STATUS.md`](docs/STATUS.md). Design and phasing:
 > [`docs/design/2026-09-14-dispatch-system-design.md`](docs/design/2026-09-14-dispatch-system-design.md).
 

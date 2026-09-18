@@ -498,8 +498,9 @@ mode. Re-auditing Phase 5a was out of this task's scope.
 
 Phase 5b is done: root cause fixed, real numbers measured, both
 correctness gates and the full k-sweep checked and explained. Phase 4 is
-merged (PR #4). Phase 5a and Phase 5b are both ready to push as PRs per
-the one-branch-per-phase convention. Phase 3's PR (#3) already merged.
+merged (PR #4), as are Phase 5a (PR #5) and Phase 5b (PR #6), each on its
+own branch per the one-branch-per-phase convention. Phase 3's PR (#3) also
+merged.
 Phase 2's PR is still open and awaiting maintainer review; no further
 work planned on it beyond responding to review feedback. Phase 6 (final
 benchmark vs. vLLM/SGLang) planning can proceed, and should treat the
