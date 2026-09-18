@@ -1,6 +1,6 @@
 """CLI: time the grouped-GEMM backends -- eager torch loop, naive Triton,
 persistent Triton -- on synthetic DeepSeekMoE-16B-shaped routed-expert work,
-and write every summary with its full config to docs/findings/. A backend
+and write every summary with its full config to docs/findings/phase-1/. A backend
 that disagrees with the eager torch backend on the benchmark's own input is
 refused, not timed.
 
