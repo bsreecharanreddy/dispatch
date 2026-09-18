@@ -82,14 +82,25 @@ Both against the real baseline above, `--compare-generated-tokens`.
 | Drafter | `moe_layers_patched` | `token_match` (4 prompts) | Acceptance rate | Tokens/sec |
 |---|---|---|---|---|
 | draft-model (k=4) | 27 | all `true` | 74.5% | 23.03 |
-| prompt-lookup (k=4) | 27 | `{000: true, 001: false, 002: true, 003: true}` | 14.9% | 44.74 |
+| prompt-lookup (k=4) | 27 | `{000: false, 001: false, 002: true, 003: true}` | 17.7% | 47.21 |
 
 draft-model passed byte-exact on every prompt at k=4. prompt-lookup
-diverged on prompt_001 at k=4 -- see below for why, and see the k-sweep
-for the fuller picture (this is not k=4-specific).
+diverged on prompt_000 and prompt_001 -- see below for why, and see the
+k-sweep for the fuller picture (this is not k=4-specific).
+
+**The same config gave a different outcome in a separate process
+launch.** The k-sweep re-ran prompt-lookup at k=4 (same model, same
+prompts, same flags, a fresh process) and got `{000: true, 001: false,
+002: true, 003: true}` at 14.9% acceptance and 44.74 tok/s -- prompt_000
+flipped from diverging to matching, with no code or config change
+between the two runs. That is direct, in-repo evidence of the
+cross-process floating-point sensitivity root-caused below, and it is
+also why the k=4 throughput differs by ~5% between the gate run (47.21)
+and the sweep run (44.74): both are real measurements of the same
+config, reported separately rather than averaged into one number.
 
 Sources:
-`docs/findings/2026-09-18-phase-5b-real-{draft-model,prompt-lookup}-gate-results.json`.
+`docs/findings/phase-5b/2026-09-18-phase-5b-real-{draft-model,prompt-lookup}-gate-results.json`.
 
 ## The prompt-lookup divergence: root-caused, not a code bug
 
@@ -185,9 +196,10 @@ files.
   apparently contain no comparably-tight near-tie for this kernel at
   this precision -- the phenomenon above is real but position-specific,
   not "speculative decoding is broken."
-- **prompt_000 diverges in 7 of 8 configs**, the sole exception being
-  draft-model at k=4 -- one config landing back on the baseline's own
-  side of the tie by chance, not a property of k=4 or of draft-model.
+- **prompt_000 diverges in 6 of 8 configs**, the exceptions being both
+  drafters at k=4 -- configs landing back on the baseline's own side of
+  the tie, not a property of k=4 or of either drafter (the separate
+  k=4 prompt-lookup gate run, above, diverged on this same prompt).
 - **prompt_001 diverges only under prompt-lookup**, at every k tested,
   never under draft-model. Not chased to its own separate root cause
   beyond the general mechanism above (a different near-tie position,
@@ -310,23 +322,27 @@ produced a real, plausible baseline, ran both correctness gates, and
 ran the full k-sweep with `--compare-generated-tokens` checked at every
 point (closing finding I5 from the prior review).
 
-**draft-model's speculative decoding matches the true greedy baseline
-byte-exact in 27 of 32 tested (prompt, k) combinations** (4 prompts x 4
-k values, minus the 5 shown as `F` in the k-sweep table);
-**prompt-lookup matches in 24 of 32**. Every divergence traces to the
+**In the k-sweep, draft-model matches the true greedy baseline
+byte-exact in 13 of 16 (prompt, k) combinations** (4 prompts x 4 k
+values; the 3 misses are all prompt_000, at k=1, 2, and 8);
+**prompt-lookup matches in 9 of 16**. Every divergence traces to the
 same root cause -- a genuine near-tied logit position under the
 int8-quantized kernel's real floating-point precision, confirmed by two
 independent, decisive GPU probes -- not to a defect in
 `dispatch.speculative`'s propose/verify/accept/rollback logic, which was
 re-derived by hand and found correct for every candidate-count case.
 
-**Both drafters give a real, positive throughput result over the
-baseline at k=4** (23.03 and 44.74 tokens/sec vs. baseline's 25.18 --
-note draft-model's k=4 number is actually *below* the baseline here,
-while prompt-lookup's is well above; see the k-sweep for the fuller,
-more informative picture across k). prompt-lookup is the faster drafter
-at every k tested despite consistently lower acceptance, mirroring the
-prior session's own qualitative finding, now backed by real numbers.
+**Only prompt-lookup beats the baseline; draft-model never does.**
+Against the baseline's 25.18 tok/s, prompt-lookup ranges from 34.43 to
+50.93 tok/s across k=1-8 (+77.7% at k=4 in the sweep run), while
+draft-model ranges from 19.64 to 23.03 tok/s (-8.5% at its best, k=4):
+on this single-request, unbatched decode a 7B draft model's own forward
+pass costs more than the accepted tokens save. prompt-lookup is faster
+than draft-model at every k tested despite consistently lower
+acceptance, mirroring the prior (withdrawn) session's qualitative
+finding, now on real numbers. Throughput figures are single measured
+runs per config on one pod; the k=4 prompt-lookup repeat (47.21 vs.
+44.74) shows ~5% run-to-run spread.
 
 **Total real GPU cost across both Phase 5b sessions: $12.26 of the $20
 cap (61.3%)**, including a disclosed and corrected cost-cap incident

@@ -453,20 +453,23 @@ of the fix, the real re-measured baseline, both correctness gates, and
 the full k-sweep (checked at every k this time, closing finding I5):
 `docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
 
-**Real, non-degenerate results, 2026-09-18**: baseline 25.18 tok/s;
-draft-model k=4 gate byte-exact on all 4 prompts (23.03 tok/s, 74.5%
-acceptance); prompt-lookup k=4 gate byte-exact on 3 of 4 prompts (44.74
-tok/s, 14.9% acceptance). The one gate divergence (prompt-lookup,
-prompt_001) and the wider pattern the k-sweep surfaced (prompt_000
-diverges in 7 of 8 tested (k, drafter) configs, including draft-model at
-k=1/k=2/k=8) were root-caused live on the rented GPU to a genuine
-near-tied logit position under the int8-quantized kernel's actual
-floating-point precision -- confirmed by two independent, decisive
-probes (a batch-width sweep and a 10-trial same-process determinism
-check) -- not a defect in `dispatch.speculative`. prompt-lookup is the
-faster drafter at every k tested (34.4-50.9 tok/s vs. draft-model's
-19.6-23.0), despite 2-7x lower acceptance, mirroring the original
-session's own qualitative finding on now-real data.
+**Real, non-degenerate results, 2026-09-18** (A40, bf16, int8 target
+kernel, unbatched decode, 64 new tokens, 4 prompts x 5 reps): baseline
+25.18 tok/s. draft-model k=4 gate: byte-exact on all 4 prompts, 23.03
+tok/s (-8.5% vs. baseline), 74.5% acceptance. prompt-lookup k=4 gate:
+byte-exact on 2 of 4 prompts, 47.21 tok/s, 17.7% acceptance; the same
+config re-run in the k-sweep matched 3 of 4 (44.74 tok/s, +77.7%) --
+same code and flags, different process, different outcome. Across the
+8-config k-sweep, draft-model matched the baseline in 13 of 16
+(prompt, k) combinations and prompt-lookup in 9 of 16; prompt_000
+diverged in 6 of 8 configs (all but k=4), including draft-model at
+k=1/2/8. Root-caused live on the rented GPU to a genuine near-tied
+logit position under the int8-quantized kernel's actual floating-point
+precision -- confirmed by two independent probes (a batch-width sweep
+and a 10-trial same-process determinism check) -- not a defect in
+`dispatch.speculative`. **Only prompt-lookup beats the baseline**
+(34.4-50.9 tok/s across k=1-8); draft-model is below it at every k
+(19.6-23.0), despite 2-7x higher acceptance.
 
 **Memory checkpoints** (from the original 2026-09-17 session, not
 re-measured this session -- allocator behavior is unrelated to the

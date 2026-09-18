@@ -22,15 +22,17 @@ result was a null or a mixed one, it's reported that way.
 
 ---
 
-> **Status:** Phases 0-4 merged to `main` across four PRs
+> **Status:** Phases 0-5a merged to `main` across five PRs
 > ([#1](https://github.com/bsreecharanreddy/dispatch/pull/1) Phase 0,
 > [#2](https://github.com/bsreecharanreddy/dispatch/pull/2) Phase 1,
 > [#3](https://github.com/bsreecharanreddy/dispatch/pull/3) Phases 2-3,
-> [#4](https://github.com/bsreecharanreddy/dispatch/pull/4) Phase 4) —
+> [#4](https://github.com/bsreecharanreddy/dispatch/pull/4) Phase 4,
+> [#5](https://github.com/bsreecharanreddy/dispatch/pull/5) Phase 5a) —
 > Phase 2 landed as docs only, its actual contribution being the
-> upstreamed vLLM PR below, not a dispatch-repo code change. **Phase 5a
-> (int8 weight-only quantization) is complete** on its own branch, PR
-> pending. Full task-by-task record:
+> upstreamed vLLM PR below, not a dispatch-repo code change. **Phase 5b
+> (speculative decoding) is complete**, PR
+> [#6](https://github.com/bsreecharanreddy/dispatch/pull/6) open. Full
+> task-by-task record:
 > [`docs/STATUS.md`](docs/STATUS.md). Design and phasing:
 > [`docs/design/2026-09-14-dispatch-system-design.md`](docs/design/2026-09-14-dispatch-system-design.md).
 
@@ -47,8 +49,9 @@ the answer was a null or mixed result.
 serving path, an upstreamed open-source benchmark contribution, every
 rented-GPU session, and the write-ups of what broke along the way.
 
-**Measured across seven rented-GPU sessions (six phases), $27.69 total,
-all under their stated caps:** a custom Triton kernel **~65-73% faster** than DeepSeek's own
+**Measured across nine rented-GPU sessions (seven phases), $39.95 total,
+every phase within its stated cap except Phase 5b, whose original $10 cap
+was exceeded on one pod and raised to $20 with disclosure:** a custom Triton kernel **~65-73% faster** than DeepSeek's own
 stock MoE forward pass at perfect logit agreement (Phase 1); an opt-in
 skewed-load benchmark flag upstreamed to vLLM, changing which kernel config
 its own tuner picks at 4 of 5 tested batch sizes (Phase 2); a real 2-GPU
@@ -59,9 +62,15 @@ topology across 4 real GPUs that returned a genuinely mixed result rather
 than a forced win (Phase 4); and an int8 weight-only quantized kernel that
 cut expert-weight memory **49.89%** at perfect model-level agreement, while
 also surfacing and fixing a real bug where the naive quantized path was
-holding both the bf16 and int8 copies in memory at once (Phase 5a).
+holding both the bf16 and int8 copies in memory at once (Phase 5a); and
+speculative decoding whose first GPU numbers were withdrawn by this
+project's own review, then root-caused to a `transformers` loading bug
+(uninitialized RoPE buffers) and re-measured — where only the model-free
+prompt-lookup drafter beat the baseline, and byte-exact agreement with
+greedy decoding turned out to be limited by near-tied logits in the int8
+kernel (Phase 5b).
 
-**123 tests, `make check` green throughout Phase 5a** (lint, `mypy --strict`,
+**170 tests, `make check` green throughout Phase 5b** (lint, `mypy --strict`,
 and the full non-GPU suite) — GPU-dependent tests are marked and excluded
 from CI by design, then run for real on rented hardware every phase.
 
@@ -125,6 +134,7 @@ flowchart LR
 
     subgraph custom["Custom (this project's actual work)"]
         K["Grouped-GEMM expert kernel\n[Triton, Phase 1]"]
+        SD["Speculative decode loop\n[drafters + verify, Phase 5b]"]
         RT["Rust router\n[HTTP/gRPC, batching, Phase 7]"]
         MS["Python model server\n[runs router+kernel, gRPC, Phase 7]"]
     end
@@ -133,6 +143,7 @@ flowchart LR
     RT -->|gRPC| MS
     D <-.-> MS
     Q -.-> K
+    SD -.->|drives| K
     B -->|measures| MS
     B -->|measures, same config| V["vLLM / SGLang\n(comparison baseline)"]
 ```
@@ -156,9 +167,11 @@ including the ones that came back null or mixed:
 | **3 — multi-GPU EP** | Does Phase 1's naive-vs-persistent crossover hold under DeepEP's real per-expert token distribution across GPUs? | **It doesn't apply at real scale.** Naive wins at every tested token count (16-2048) on H200, independent of EP. Real DeepEP dispatch across the model's 27 MoE layers produces per-local-expert counts (median 2, max ~20) far below Phase 1's smallest tested point (16) |
 | **4 — disaggregated prefill/decode** | Does separating prefill and decode across GPU pools relieve contention, holding GPU count fixed at 4? | **Mixed, not a clean result.** Disaggregated TTFT beats co-located at concurrency 4 (0.46s vs 1.12s) but loses at concurrency 8 (0.98s vs 0.70s) — most likely a kernel-warmup confound between independent process launches, reported as genuinely inconclusive rather than forced |
 | **5a — int8 quantization** | Does a self-computed, per-channel int8 weight-only kernel cut memory with no model-level correctness cost? | **Yes on both counts, no speedup.** **49.89%** expert-weight memory reduction, perfect top-1/mutual-top-k agreement vs. the naive bf16 kernel at every tested position. Throughput was a near-exact tie with naive (**-1.2%**), as expected — weight-only quantization saves memory bandwidth, not FLOPs. A real bug (quantizing without freeing the original bf16 weights, OOMing a 44GB L40) was found and fixed mid-session |
+| **5b — speculative decoding** | Does speculative decoding (a 7B draft model, or model-free prompt-lookup) speed up single-request decode on the int8 target while reproducing plain greedy output exactly? | **Partly, and not exactly.** A40, bf16, unbatched, baseline **25.18 tok/s**: only prompt-lookup beats it (**34.4-50.9 tok/s** across k=1-8, +77.7% at k=4); the 7B draft model is *below* baseline at every k (19.6-23.0) despite 2-7x higher acceptance. Output matched plain greedy in 13 of 16 (prompt, k) combinations for draft-model and 9 of 16 for prompt-lookup; the same k=4 config matched 2/4 prompts in one process and 3/4 in another. Root-caused to near-tied logits under the int8 kernel's floating-point precision, not a logic bug. The first session's numbers were withdrawn by this project's own review (degenerate baseline) and root-caused to a `transformers` bug leaving DeepSeek's RoPE buffers uninitialized |
 
-Full method and every number: one findings doc and one cost doc per phase
-in [`docs/findings/`](docs/findings/).
+Full method and every number: one folder per phase in
+[`docs/findings/`](docs/findings/) (`phase-0/` through `phase-5b/`), each
+with a run doc and a cost doc.
 
 ## What it does not do
 
@@ -186,7 +199,7 @@ doc's own scope boundaries:
 | Model | `deepseek-ai/deepseek-moe-16b-base` — 16.4B params, fine-grained MoE, shared + routed experts |
 | Kernel | Custom Triton grouped-GEMM (naive + persistent/cache-aware), int8 weight-only quantization (Phase 5a) |
 | Multi-GPU | DeepSeek's DeepEP — real all-to-all expert-parallel dispatch/combine over NVLink/SXM |
-| Serving | Continuous-batching prefill/decode workers, both co-located and disaggregated topologies |
+| Serving | Continuous-batching prefill/decode workers, both co-located and disaggregated topologies; speculative decoding (draft-model and prompt-lookup drafters, Phase 5b) |
 | Benchmark methodology | vLLM/SGLang-style metrics — TTFT, inter-token latency, tokens/sec, cost per million tokens |
 | Language | Python 3.12+ — `uv`, `ruff`, `mypy --strict`, `pytest` |
 | GPU provisioning | RunPod's API via lightweight scripts (`scripts/gpu/`) — not Terraform; see `CLAUDE.md`'s cost discipline |
@@ -200,15 +213,18 @@ src/dispatch/
   kernels/          reference MoE, Triton grouped-GEMM (naive + persistent), int8 quantization,
                     expert-parallel sharding, backend registry
   serving/          KV-cache slice/handoff, continuous-batching prefill/decode, co-located worker
+  speculative/      Drafter protocol (draft-model, prompt-lookup), shared verify/rollback loop,
+                    independent plain-greedy oracle, exact generated-token comparison
 scripts/
   run_baseline.py       latency/throughput CLI, stock or kernel-patched, --compare-reference gate
+  run_speculative_bench.py  speculative-decoding CLI, --compare-generated-tokens checks exact output
   run_kernel_bench.py   pure kernel micro-benchmark, refuses to time a backend that disagrees
   gpu/                  RunPod API client, provisioning CLI, pod-live correctness/concurrency scripts
 tests/              unit + integration; `gpu`-marked tests need real CUDA, excluded from CI
 docs/design/        the authoritative architecture, phase plan, and scope document
 docs/adr/           decisions, each checked against real current material before being made
 docs/plans/         per-phase implementation plans, written before any code
-docs/findings/      measured results and costs — one run doc and one cost doc per phase
+docs/findings/      measured results and costs — one subfolder per phase (phase-0 ... phase-5b)
 docs/runbooks/      the exact GPU-session steps each phase's real run followed
 ```
 
@@ -235,7 +251,7 @@ is the authoritative architecture, phasing, and scope document.
 |---|---|
 | [`docs/STATUS.md`](docs/STATUS.md) | the verification log, at task granularity, updated in the same commit as the work |
 | [`docs/adr/`](docs/adr/) | three decisions, each citing the real material that settled it |
-| [`docs/findings/`](docs/findings/) | the measurements themselves, one run doc and one cost doc per phase |
+| [`docs/findings/`](docs/findings/) | the measurements themselves, one subfolder per phase, each with a run doc and a cost doc |
 | [`docs/plans/`](docs/plans/) | per-phase implementation plans, written before any code |
 | [`docs/runbooks/`](docs/runbooks/) | the exact GPU-session steps each phase's real run followed |
 
