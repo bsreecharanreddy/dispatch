@@ -568,6 +568,8 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 5 (vLLM/SGLang adapters + registry)**: each engine behind one adapter calling its own fused_experts with fixed routing; verified against eager fakes only -- the real engines are not exercised until the pod (Task 10).
 
+- **Task 6 (race summarizer)**: the pre-registered tuning rule as code -- dispatch's tuned tile size is picked on uniform routing only and reused for zipf; refused results never reach a table.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
