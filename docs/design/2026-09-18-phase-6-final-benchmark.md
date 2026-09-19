@@ -65,7 +65,7 @@ shapes.
 Stage 1 gates stage 2; stage 2 gates nothing but is run before stage 3 so
 that the cheapest, highest-value evidence is on disk first.
 
-### 3.1 At-scale correctness gate (blocks the rest)
+### 3.1 At-scale correctness gate (gates each config, per the plan)
 
 `docs/STATUS.md` owes this from Phase 5a and 5b: Phase 5a's "perfect
 top-1/mutual-top-k agreement" covered 29 positions in one run, and Phase
@@ -85,7 +85,12 @@ as more than "true on a small sample".
   the known, explained floating-point sensitivity.
 - **The threshold is fixed in the implementation plan, from Phase 5b's
   recorded near-tie data, before any GPU time is spent -- not chosen after
-  seeing results.**
+  seeing results.** (Fixed at 1.0 logit; see the plan's "Pre-registered
+  gate rule".)
+- **Gate scope, refined in the plan (2026-09-19):** the gate is per config.
+  A config that trips it is excluded from the race and reported as failing
+  its gate, rather than halting the whole paid session; the other configs
+  proceed. A stock-vs-stock control run measures the gate's own noise floor.
 - Reuses `scripts/run_baseline.py`'s reference-capture and comparison
   path rather than a new one; extends it to a larger, seeded prompt set.
 
@@ -101,7 +106,10 @@ zipf routing (reusing `dispatch.kernels.bench.sample_topk_idx`); bf16 and
 int8. The exact grid is fixed in the plan; Phase 1's sweep points are the
 default so results extend Phase 1's tables.
 
-**Same inputs, engine-specific adapters.** One seeded input set is
+**Same inputs, engine-specific adapters.** All contestants, dispatch's own
+kernels included, run inside the one engines venv so they share a torch and
+a Triton compiler version (dispatch's `torch>=2.14.0` floor is a
+model-loading constraint, not a kernel one). One seeded input set is
 generated once -- `x`, `topk_ids`, `topk_weights`, and the expert weights
 -- and a thin adapter per engine converts it to that engine's layout
 (vLLM and SGLang take fused gate+up in `w1` and down in `w2`; dispatch
@@ -120,8 +128,10 @@ enforces.
 
 **Timed region.** The whole routed layer from `(x, topk_ids,
 topk_weights)` to output, each engine's own path (grouping/alignment, the
-GEMMs, activation, weighted combine), plus one bare-GEMM diagnostic per
-engine, matching Phase 1's structure. Timing is `triton.testing.do_bench`
+GEMMs, activation, weighted combine). Phase 1's bare-GEMM diagnostic
+stays with dispatch's own kernels only (run_kernel_bench.py already has it):
+vLLM's and SGLang's fused-MoE paths expose no separable single-GEMM entry
+point, so a per-engine diagnostic isn't measurable like-for-like. Timing is `triton.testing.do_bench`
 (warmup, repetition and synchronization are its job), reporting mean, p50
 and p99 as Phase 1 does.
 
@@ -141,8 +151,12 @@ distribution each engine's config was tuned under.
 
 ### 3.3 Engine reference (not a race)
 
-vLLM and SGLang each serve the full model (bf16) on the same L40, in
-**separate virtual environments** (their torch pins conflict), driven by
+vLLM and SGLang each serve the full model (bf16) on the same L40, from
+one shared engines virtual environment (checked live 2026-09-19: vllm 0.29.0
+and sglang 0.5.20 both pin `torch==2.13.0` and their transformers pins are
+compatible, so the conflict this design first assumed does not exist at
+these versions; if a joint install fails to resolve, fall back to one venv
+per engine and record each Triton version in the output), driven by
 the standard serving benchmark (vLLM's `vllm bench serve` /
 `benchmark_serving.py`, which works against any OpenAI-compatible server),
 on one seeded trace, at concurrency 1, 4, 16 and 64. Standard metrics:
@@ -151,8 +165,8 @@ and **cost per million tokens computed from the measured GPU-hour rate**
 (design §6), never estimated.
 
 **Dispatch appears at concurrency 1 only**, replaying the identical
-token-ID prompts (a seeded trace file the existing harness will need to
-accept) through `scripts/run_baseline.py`'s in-process path. That row
+prompts (the gate's 16-prompt set, written out as the JSONL trace the
+engines read; dispatch runs each prompt twice, one at a time) through `scripts/run_baseline.py`'s in-process path. That row
 carries an explicit caveat in the table itself: the vLLM/SGLang numbers
 include HTTP overhead, CUDA-graph capture and torch.compile warmup
 effects that dispatch's in-process loop doesn't, and dispatch has no

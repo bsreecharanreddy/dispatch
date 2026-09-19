@@ -529,6 +529,35 @@ spent. Decided in brainstorming:
   from 5a/5b, with a large-gap disagreement threshold fixed in the plan
   from 5b's near-tie data before any GPU time.
 
+**Implementation plan written, 2026-09-19:**
+`docs/plans/2026-09-19-phase-6-final-benchmark-plan.md`, 15 tasks. Its CPU-testable
+code (gap-split classifier, gate prompts, engine adapters, race driver,
+summarizer, serving-benchmark helpers) was built and verified in a scratch copy
+of the repo before being written into the plan: 236 tests, ruff and
+`mypy --strict` clean. Only what the plan says is verified was verified; the real
+vLLM and SGLang engines have **not** been exercised (neither installs on this
+machine) -- that is Task 10's first job on the pod.
+
+- **Gate rule pre-registered in the plan, before any GPU time:** a top-1
+  disagreement fails only where the reference's top-1/top-2 logit gap exceeds
+  1.0 (2.5x Phase 5b's widest measured near-tie of 0.4); minimum 500 compared
+  positions (the 16 fixed prompts give 1,036 with the real tokenizer); a
+  stock-vs-stock control measures the gate's own noise floor; a failing config
+  is excluded from the race rather than halting the session. A test pins the
+  threshold so it cannot be loosened after seeing a run.
+- **Design assumptions the plan's live checks corrected (2026-09-19):** vllm
+  0.29.0 and sglang 0.5.20 both pin `torch==2.13.0` with compatible transformers
+  pins, so one shared engines venv is possible (the design assumed conflicting
+  pins) and all contestants can share one Triton compiler; SGLang's own tuner
+  does not list V1's `DeepseekForCausalLM`, so the plan tunes it through a
+  config-only architecture shim, with a bounded fallback to untuned; the
+  per-engine bare-GEMM diagnostic is dropped (the fused paths expose no separable
+  single-GEMM entry point). Design amended accordingly.
+- **Tuning rule pre-registered:** every contestant is tuned under uniform routing
+  only, then timed under both distributions; dispatch's tuned tile size is picked
+  on uniform results and reused for zipf (a test asserts the choice never looks
+  at zipf).
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
@@ -539,7 +568,8 @@ merged.
 Phase 2's PR is still open and awaiting maintainer review; no further
 work planned on it beyond responding to review feedback.
 
-Phase 6's design is approved (see "Phase 6 progress"). Next: write its
-implementation plan in `docs/plans/`, fixing the correctness gate's
-logit-gap threshold from Phase 5b's recorded data, then execute it task
-by task.
+Phase 6's design is approved and its implementation plan is written
+(see "Phase 6 progress"). Next: execute
+`docs/plans/2026-09-19-phase-6-final-benchmark-plan.md` task by task.
+Tasks 1-9 are local, free and TDD; Tasks 10-14 are the paid L40 session and
+need the user's explicit go-ahead (live price stated first, $10 cap).
