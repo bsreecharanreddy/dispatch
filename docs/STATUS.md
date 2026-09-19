@@ -558,6 +558,8 @@ machine) -- that is Task 10's first job on the pod.
   on uniform results and reused for zipf (a test asserts the choice never looks
   at zipf).
 
+- **Task 1 (gap-split classifier)**: dispatch.benchmark.agreement splits every top-1 disagreement by the reference's top1-top2 logit gap; threshold 1.0 and 500-position floor pre-registered in the plan and pinned by a test.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
