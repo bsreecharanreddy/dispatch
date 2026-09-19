@@ -6,14 +6,15 @@ the real engines are checked by the `gpu`-marked test on the pod."""
 
 from __future__ import annotations
 
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 from typing import Any, NamedTuple
 
 import pytest
 import torch
 import torch.nn.functional as F  # noqa: N812 -- F is the universal PyTorch convention
 
-from dispatch.benchmark.engines import registry
+from dispatch.benchmark.engines import registry, sglang_moe
 from dispatch.benchmark.engines.base import (
     dequantized_weights,
     make_case,
@@ -187,3 +188,51 @@ def test_registry_rejects_unknown_engines() -> None:
         registry.build_engines("tensorrt")
     with pytest.raises(ValueError, match="unknown engine"):
         registry.build_engines("dispatch-cuda")
+
+
+def test_init_runs_once_and_publishes_the_runtime_config_however_often_it_is_called(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SGLang rejects a second initialize_model_parallel ('tensor model parallel
+    group is already initialized'), and the real-engine tests build an engine per
+    test, so the setup has to be idempotent. Fake SGLang modules stand in for it."""
+    calls = {"environment": 0, "model_parallel": 0}
+    published: list[dict[str, Any]] = []
+    parallel_state = ModuleType("sglang.srt.distributed.parallel_state")
+
+    def init_environment(**kwargs: Any) -> None:
+        calls["environment"] += 1
+
+    def init_model_parallel(**kwargs: Any) -> None:
+        calls["model_parallel"] += 1
+
+    server_args = ModuleType("sglang.srt.server_args")
+
+    class FakeServerArgs:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+
+    def publish(args: FakeServerArgs) -> None:
+        published.append(args.kwargs)
+
+    server_args.ServerArgs = FakeServerArgs  # type: ignore[attr-defined]
+    server_args.set_global_server_args_for_scheduler = publish  # type: ignore[attr-defined]
+    parallel_state.init_distributed_environment = init_environment  # type: ignore[attr-defined]
+    parallel_state.initialize_model_parallel = init_model_parallel  # type: ignore[attr-defined]
+    for name in ("sglang", "sglang.srt", "sglang.srt.distributed"):
+        monkeypatch.setitem(sys.modules, name, ModuleType(name))
+    monkeypatch.setitem(sys.modules, "sglang.srt.distributed.parallel_state", parallel_state)
+    monkeypatch.setitem(sys.modules, "sglang.srt.server_args", server_args)
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
+    monkeypatch.setattr(sglang_moe, "_initialized", False)
+
+    sglang_moe.init_distributed()
+    sglang_moe.init_distributed()
+
+    assert calls == {"environment": 1, "model_parallel": 1}
+    # fused_experts reads get_exec(), a config namespace SGLang only publishes
+    # from a ServerArgs (found on the first real run: "config namespace 'exec'
+    # not published"), so setup must publish one -- once.
+    assert len(published) == 1
+    assert published[0]["dtype"] == "bfloat16"
+    assert published[0]["trust_remote_code"] is True
