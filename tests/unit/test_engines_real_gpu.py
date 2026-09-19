@@ -94,18 +94,24 @@ def test_a_mutated_weight_layout_turns_the_gate_red(
         assert_matches_reference(output, reference_output(case, weights))
 
 
-def test_bound_layers_are_repeatable_and_leave_the_input_untouched(
-    weights: StackedExpertWeights,
+@pytest.mark.parametrize("name", ENGINES)
+def test_bound_layers_leave_the_input_untouched_and_repeat_within_rounding(
+    name: str, weights: StackedExpertWeights
 ) -> None:
-    """SGLang's inplace default would overwrite x; timing calls the layer
-    hundreds of times, so any input mutation would corrupt every later call."""
-    for name in ENGINES:
-        case = make_case(64, "zipf", dtype=torch.bfloat16, seed=1, device="cuda")
-        x_before = case.x.clone()
-        layer = _engine(name).prepare_bf16(weights)(case)
+    """SGLang's inplace default would overwrite x, and timing calls the layer
+    hundreds of times, so any input mutation would corrupt every later call.
 
-        first = layer().clone()
-        second = layer()
+    Repeatability is checked within the reference tolerance, not bitwise:
+    dispatch's combine step sums each token's top-k rows with index_add_,
+    which is atomicAdd on CUDA, so two identical calls differ by bf16 rounding
+    (measured on the first real run: one ulp, 0.03125, on 24% of elements).
+    That is a property of dispatch's kernel path, not a bug in the check."""
+    case = make_case(64, "zipf", dtype=torch.bfloat16, seed=1, device="cuda")
+    x_before = case.x.clone()
+    layer = _engine(name).prepare_bf16(weights)(case)
 
-        torch.testing.assert_close(first.float(), second.float())
-        assert torch.equal(case.x, x_before)
+    first = layer().clone()
+    second = layer()
+
+    assert_matches_reference(second, first)
+    assert torch.equal(case.x, x_before)
