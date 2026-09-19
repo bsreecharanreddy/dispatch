@@ -587,7 +587,17 @@ Phase 2's PR is still open and awaiting maintainer review; no further
 work planned on it beyond responding to review feedback.
 
 Phase 6's design is approved and its implementation plan is written
-(see "Phase 6 progress"). Next: execute
-`docs/plans/2026-09-19-phase-6-final-benchmark-plan.md` task by task.
-Tasks 1-9 are local, free and TDD; Tasks 10-14 are the paid L40 session and
-need the user's explicit go-ahead (live price stated first, $10 cap).
+(see "Phase 6 progress"). **Tasks 1-9 (the local, free, TDD half) are done**,
+one commit each, `make check` green (244 passed, 3 skipped `gpu`).
+
+**Task 10 (the paid pod session) has not started, on purpose: the L40 was out
+of stock on 2026-09-19.** Live RunPod catalog that day: L40 Secure $0.82/hr
+with availability NONE and CUDA 13.0 hosts unavailable (vllm 0.29.0 and
+sglang 0.5.20 need CUDA 13). In-stock same-class alternatives were the L40S
+($1.09/hr, Ada, stock MEDIUM) and the A40 ($0.49/hr, Ampere, stock HIGH). The
+user's decision was to **wait for the L40** rather than substitute either:
+no spend, and Phase 6 keeps the same GPU class as Phase 1 and 5a so its tables
+extend theirs. To resume: re-check L40 stock, state the live price, get the
+user's go-ahead, then start Task 10 of
+`docs/plans/2026-09-19-phase-6-final-benchmark-plan.md` (Tasks 10-14 are the
+paid session, $10 cap, checkpoints at $5 and $8).
