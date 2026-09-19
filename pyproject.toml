@@ -49,7 +49,7 @@ max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
 # Comparing against expected literals is normal and readable in tests.
-"tests/**/*.py" = ["PLR2004", "PLR0913"]
+"tests/**/*.py" = ["PLR2004", "PLR0913", "PLR0917"]
 # Triton kernel signatures are pointer/stride/tile-size lists by construction,
 # and Triton's convention is UPPER_CASE for tl.constexpr arguments.
 "src/dispatch/kernels/grouped_gemm.py" = ["N803", "PLR0913", "PLR0917"]
@@ -84,6 +84,15 @@ follow_imports = "skip"
 # that, same boundary as triton above.
 [[tool.mypy.overrides]]
 module = ["deep_ep", "deep_ep.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# vLLM and SGLang are only installed in Phase 6's rented-pod engine venv, never
+# on this dev box or CI (they pin torch==2.13.0 and need a CUDA build), so their
+# adapters import them lazily and mypy treats them as Any, same boundary as
+# triton and deep_ep above.
+[[tool.mypy.overrides]]
+module = ["vllm", "vllm.*", "sglang", "sglang.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 

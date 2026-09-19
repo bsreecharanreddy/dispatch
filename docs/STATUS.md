@@ -566,6 +566,8 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 4 (engine contract + dispatch adapter)**: seeded inputs, fp32 reference, fused gate+up layout, and dispatch's kernels behind one MoEEngine contract; uniform and zipf cases share x and weights so only routing differs.
 
+- **Task 5 (vLLM/SGLang adapters + registry)**: each engine behind one adapter calling its own fused_experts with fixed routing; verified against eager fakes only -- the real engines are not exercised until the pod (Task 10).
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
