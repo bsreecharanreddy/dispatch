@@ -139,10 +139,12 @@ def summarize_bench_result(
         )
     ttfts_ms = sorted(t * MS for t in raw["ttfts"])
     itls_ms = sorted(gap * MS for request in raw["itls"] for gap in request)
-    e2e_ms = sorted(latency * MS for latency in raw["latencies"])
-    tokens_per_s = [
-        n / latency for n, latency in zip(raw["output_lens"], raw["latencies"], strict=True)
-    ]
+    # vLLM's own --save-detailed output carries no per-request end-to-end
+    # "latencies" key (confirmed live on 0.29.0) -- only per-request ttft and
+    # the inter-token gaps that follow it, so end-to-end is their sum.
+    latencies_s = [ttft + sum(gaps) for ttft, gaps in zip(raw["ttfts"], raw["itls"], strict=True)]
+    e2e_ms = sorted(latency * MS for latency in latencies_s)
+    tokens_per_s = [n / latency for n, latency in zip(raw["output_lens"], latencies_s, strict=True)]
     output_tokens_per_s = float(raw["output_throughput"])
     return ServingSummary(
         concurrency=concurrency,

@@ -19,16 +19,19 @@ from dispatch.benchmark.serving_bench import (
 
 
 def _raw(**overrides: Any) -> dict[str, Any]:
-    """A vLLM bench-serve --save-detailed result for 4 requests of 64 tokens."""
+    """A vLLM 0.29.0 bench-serve --save-detailed result for 4 requests of 64
+    tokens. Every request's ttft is 0.1s and its 63 remaining tokens arrive at
+    a steady 0.03s/token, so end-to-end latency (derived, not a raw key --
+    0.29.0 carries no per-request "latencies" field) is 0.1 + 63*0.03 = 1.99s
+    for every request, and tokens_per_s is 64 / 1.99."""
     raw: dict[str, Any] = {
         "completed": 4,
         "failed": 0,
         "duration": 8.0,
         "output_throughput": 32.0,  # 4 * 64 tokens / 8 s
         "output_lens": [64, 64, 64, 64],
-        "ttfts": [0.1, 0.2, 0.3, 0.4],
-        "itls": [[0.02, 0.02], [0.03, 0.03], [0.02, 0.04], [0.02, 0.02]],
-        "latencies": [2.0, 2.0, 2.0, 2.0],
+        "ttfts": [0.1, 0.1, 0.1, 0.1],
+        "itls": [[0.03] * 63, [0.03] * 63, [0.03] * 63, [0.03] * 63],
         "errors": ["", "", "", ""],
     }
     raw.update(overrides)
@@ -44,11 +47,22 @@ def _summarize(raw: dict[str, Any]) -> Any:
 def test_summary_converts_to_milliseconds_and_computes_request_throughput() -> None:
     summary = _summarize(_raw())
 
-    assert summary.mean_ttft_ms == pytest.approx(250.0)
-    assert summary.p50_ttft_ms == pytest.approx(250.0)
-    assert summary.mean_request_tokens_per_s == pytest.approx(32.0)  # 64 tokens / 2.0 s
-    assert summary.p99_e2e_ms == pytest.approx(2000.0)
-    assert summary.mean_itl_ms == pytest.approx(25.0)
+    assert summary.mean_ttft_ms == pytest.approx(100.0)
+    assert summary.p50_ttft_ms == pytest.approx(100.0)
+    assert summary.mean_request_tokens_per_s == pytest.approx(64 / 1.99)
+    assert summary.p99_e2e_ms == pytest.approx(1990.0)
+    assert summary.mean_itl_ms == pytest.approx(30.0)
+
+
+def test_end_to_end_latency_is_derived_from_ttft_plus_the_inter_token_gaps() -> None:
+    """The real vLLM 0.29.0 schema carries no per-request "latencies" key at
+    all -- summarize_bench_result must not depend on one being present."""
+    raw = _raw()
+    assert "latencies" not in raw
+
+    summary = _summarize(raw)
+
+    assert summary.p50_e2e_ms == pytest.approx(1990.0)
 
 
 def test_cost_per_million_tokens_comes_from_the_rate_and_measured_throughput() -> None:
