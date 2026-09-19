@@ -572,6 +572,8 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 7 (race driver)**: prepare/run/merge; seeded inputs and fp32 references written once and loaded by every contestant; a disagreeing engine is refused, not timed, and its record is written before the non-zero exit.
 
+- **Task 8 (serving-benchmark helpers)**: vllm bench serve / server commands, a summarizer that refuses failed requests and non-64-token outputs, cost per million tokens from the measured GPU rate, and a driver that always tears its server down.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
