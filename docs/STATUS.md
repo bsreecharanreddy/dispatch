@@ -574,6 +574,8 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 8 (serving-benchmark helpers)**: vllm bench serve / server commands, a summarizer that refuses failed requests and non-64-token outputs, cost per million tokens from the measured GPU rate, and a driver that always tears its server down.
 
+- **Task 9 (real-engine gate)**: gpu-marked tests check every contestant against the fp32/dequantized reference on real dims, plus a mutation test (swapped gate/up must fail); skipped off-GPU, run on the pod in Task 10.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
