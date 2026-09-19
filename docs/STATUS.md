@@ -562,6 +562,8 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 2 (gate prompt set + run_baseline gate mode)**: --prompt-set gate runs 16 fixed prompts (1,036 positions with the real tokenizer) and fails on any large-gap flip or fewer than 500 positions.
 
+- **Task 3 (ignore_eos, public percentile)**: the harness can generate exactly N tokens past EOS, matching vllm bench serve --ignore-eos, so dispatch's concurrency-1 reference row is comparable.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both

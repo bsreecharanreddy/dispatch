@@ -54,6 +54,7 @@ def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-faci
     repetitions: int,
     max_new_tokens: int,
     moe_kernel: str = "none",
+    ignore_eos: bool = False,
 ) -> tuple[list[TokenTimings], dict[str, torch.Tensor], int]:
     """Returns the timed runs, the logits, and how many MoE layers were patched."""
     model, tokenizer = load_model(
@@ -72,7 +73,12 @@ def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-faci
 
     runs = [
         generate_with_timings(
-            model, tokenizer, prompt, max_new_tokens=max_new_tokens, device=device
+            model,
+            tokenizer,
+            prompt,
+            max_new_tokens=max_new_tokens,
+            device=device,
+            ignore_eos=ignore_eos,
         )
         for prompt in prompts
         for _ in range(repetitions)
@@ -89,6 +95,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--max-new-tokens", type=int, default=64)
+    parser.add_argument(
+        "--ignore-eos",
+        action="store_true",
+        help="generate exactly --max-new-tokens even past an EOS (matches vllm bench serve)",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("docs/findings/phase-0"))
     parser.add_argument("--run-label", default=time.strftime("%Y-%m-%d-baseline"))
     parser.add_argument(
@@ -118,6 +129,7 @@ def main(argv: list[str] | None = None) -> None:
         repetitions=args.repetitions,
         max_new_tokens=args.max_new_tokens,
         moe_kernel=args.moe_kernel,
+        ignore_eos=args.ignore_eos,
     )
     summary = summarize(runs)
 
@@ -148,6 +160,8 @@ def main(argv: list[str] | None = None) -> None:
                 "moe_kernel": args.moe_kernel,
                 "moe_layers_patched": moe_layers_patched,
                 "prompt_set": args.prompt_set,
+                "max_new_tokens": args.max_new_tokens,
+                "ignore_eos": args.ignore_eos,
                 "gap_split": None if gap_split is None else gap_split.to_dict(),
                 **asdict(summary),
                 "reference_comparison": {key: asdict(value) for key, value in comparison.items()},
