@@ -576,6 +576,8 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 9 (real-engine gate)**: gpu-marked tests check every contestant against the fp32/dequantized reference on real dims, plus a mutation test (swapped gate/up must fail); skipped off-GPU, run on the pod in Task 10.
 
+- **Task 10 (pod setup + real-engine verification), 2026-09-19**: L40 pod `97jlyai5sowyeq` (Secure, US-KS-2, $0.82/hr, driver 580.178.04, CUDA 13.0), created 17:54:26Z once the L40 came back in stock. Real-engine gate passed for every contestant: dispatch naive/persistent and vLLM 36 passed, SGLang 14 passed -- each engine meets the fp32 (bf16) or dequantized (int8) reference at 1/64/512 tokens under both routing distributions, and every mutation test fails as required. `vllm bench serve` flags all present in the installed 0.29.0. Deviations from the plan, all recorded: (1) vllm 0.29.0 and sglang 0.5.20 do not co-install (compressed-tensors 0.17.0 vs 0.18.0), so one venv per engine, both on torch 2.13.0+cu130 and triton 3.7.1, so the compiler is still shared; sglang additionally needs --prerelease=allow (cuda-tile 1.6.0rc5, a flash-attn-4 beta); (2) the venvs live on the pod's local disk, not /workspace, a network filesystem where import sglang took minutes; (3) SGLang needs ninja on PATH and a published ServerArgs, fixed in the adapter (c31d1f4); (4) dispatch's combine step (index_add_, atomicAdd on CUDA) is not bitwise repeatable: two identical calls differ by one bf16 ulp on about 24% of elements, so the repeatability test now checks within rounding (2536764). Evidence from the pod is committed in Task 14.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
