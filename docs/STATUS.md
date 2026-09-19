@@ -570,6 +570,8 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 6 (race summarizer)**: the pre-registered tuning rule as code -- dispatch's tuned tile size is picked on uniform routing only and reused for zipf; refused results never reach a table.
 
+- **Task 7 (race driver)**: prepare/run/merge; seeded inputs and fp32 references written once and loaded by every contestant; a disagreeing engine is refused, not timed, and its record is written before the non-zero exit.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
