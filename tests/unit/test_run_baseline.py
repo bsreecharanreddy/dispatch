@@ -122,6 +122,115 @@ def test_main_exits_nonzero_on_disagreement_but_keeps_the_evidence(
     assert (tmp_path / "kernel-run-reference.safetensors").exists()
 
 
+def _gate_logits(rows: int) -> torch.Tensor:
+    """`rows` positions over a 7-token vocab whose top-1 is column 0 at a 3.0 gap."""
+    logits = torch.zeros(rows, 7)
+    logits[:, 0], logits[:, 1] = 5.0, 2.0
+    return logits
+
+
+def _gate_pair(
+    rows: int, flips: dict[int, float]
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    """(reference, actual): identical except that at each row in `flips` the
+    reference's top-1/top-2 gap is that value and actual has them swapped."""
+    reference = _gate_logits(rows)
+    actual = _gate_logits(rows)
+    for row, gap in flips.items():
+        reference[row, 0], reference[row, 1] = 5.0, 5.0 - gap
+        actual[row, 0], actual[row, 1] = 5.0 - gap, 5.0
+    return {"prompt_000_logits": reference}, {"prompt_000_logits": actual}
+
+
+def _run_gate(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    reference: dict[str, torch.Tensor],
+    actual: dict[str, torch.Tensor],
+) -> None:
+    reference_path = tmp_path / "stock-reference.safetensors"
+    save_reference(reference, reference_path)
+    monkeypatch.setattr(run_baseline_module, "run_baseline", _fake_run_baseline(actual, 27))
+    monkeypatch.setattr(run_baseline_module, "summarize", lambda runs: FAKE_SUMMARY)
+    main(
+        [
+            "--prompt-set",
+            "gate",
+            "--moe-kernel",
+            "quantized",
+            "--compare-reference",
+            str(reference_path),
+            "--output-dir",
+            str(tmp_path),
+            "--run-label",
+            "gate-run",
+        ]
+    )
+
+
+def test_gate_records_the_gap_split_and_passes_a_clean_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    reference, actual = _gate_pair(600, {})
+
+    _run_gate(monkeypatch, tmp_path, reference, actual)
+
+    results = json.loads((tmp_path / "gate-run-results.json").read_text())
+    assert results["prompt_set"] == "gate"
+    assert results["gap_split"]["positions"] == 600
+    assert results["gap_split"]["disagreements"] == 0
+    assert results["gap_split"]["top1_agreement"] == 1.0
+
+
+def test_gate_passes_near_tie_flips_but_counts_them(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    reference, actual = _gate_pair(600, {3: 0.125, 40: 0.25, 99: 0.4})
+
+    _run_gate(monkeypatch, tmp_path, reference, actual)
+
+    split = json.loads((tmp_path / "gate-run-results.json").read_text())["gap_split"]
+    assert (split["near_tie_disagreements"], split["large_gap_disagreements"]) == (3, 0)
+    assert split["max_disagreement_gap"] == pytest.approx(0.4)
+
+
+def test_gate_fails_a_large_gap_flip_but_keeps_the_evidence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    reference, actual = _gate_pair(600, {3: 0.125, 7: 3.0})
+
+    with pytest.raises(SystemExit, match="a bug, not a near-tie"):
+        _run_gate(monkeypatch, tmp_path, reference, actual)
+
+    split = json.loads((tmp_path / "gate-run-results.json").read_text())["gap_split"]
+    assert split["large_gap_disagreements"] == 1
+    assert (tmp_path / "gate-run-reference.safetensors").exists()
+
+
+def test_gate_refuses_to_claim_agreement_over_too_few_positions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    reference, actual = _gate_pair(29, {})  # Phase 5a's sample size
+
+    with pytest.raises(SystemExit, match="fewer than the 500"):
+        _run_gate(monkeypatch, tmp_path, reference, actual)
+
+
+def test_a_run_without_a_reference_records_no_gap_split(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        run_baseline_module, "run_baseline", _fake_run_baseline(_gate_pair(600, {})[1], 0)
+    )
+    monkeypatch.setattr(run_baseline_module, "summarize", lambda runs: FAKE_SUMMARY)
+
+    main(["--prompt-set", "gate", "--output-dir", str(tmp_path), "--run-label", "ref-run"])
+
+    results = json.loads((tmp_path / "ref-run-results.json").read_text())
+    assert results["gap_split"] is None
+    assert (tmp_path / "ref-run-reference.safetensors").exists()
+
+
 @pytest.mark.slow
 def test_run_baseline_end_to_end_with_a_real_tiny_model() -> None:
     runs, logits, moe_layers_patched = run_baseline_module.run_baseline(

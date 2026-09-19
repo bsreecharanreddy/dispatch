@@ -560,6 +560,8 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 1 (gap-split classifier)**: dispatch.benchmark.agreement splits every top-1 disagreement by the reference's top1-top2 logit gap; threshold 1.0 and 500-position floor pre-registered in the plan and pinned by a test.
 
+- **Task 2 (gate prompt set + run_baseline gate mode)**: --prompt-set gate runs 16 fixed prompts (1,036 positions with the real tokenizer) and fails on any large-gap flip or fewer than 500 positions.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both

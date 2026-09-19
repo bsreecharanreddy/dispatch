@@ -15,6 +15,12 @@ from pathlib import Path
 
 import torch
 
+from dispatch.benchmark.agreement import (
+    MIN_GATE_POSITIONS,
+    aggregate_gap_split,
+    compare_gap_split,
+)
+from dispatch.benchmark.gate_prompts import GATE_PROMPTS
 from dispatch.benchmark.harness import generate_with_timings, load_model
 from dispatch.benchmark.metrics import TokenTimings, summarize
 from dispatch.benchmark.reference import (
@@ -89,6 +95,12 @@ def main(argv: list[str] | None = None) -> None:
         "--moe-kernel", default="none", choices=["none", *BACKENDS, QUANTIZED_BACKEND]
     )
     parser.add_argument(
+        "--prompt-set",
+        choices=["default", "gate"],
+        default="default",
+        help="'gate' runs Phase 6's larger fixed prompt set and enforces its gap-split rule",
+    )
+    parser.add_argument(
         "--compare-reference",
         type=Path,
         default=None,
@@ -102,7 +114,7 @@ def main(argv: list[str] | None = None) -> None:
         device=args.device,
         dtype=dtype,
         trust_remote_code=args.trust_remote_code,
-        prompts=DEFAULT_PROMPTS,
+        prompts=list(GATE_PROMPTS) if args.prompt_set == "gate" else DEFAULT_PROMPTS,
         repetitions=args.repetitions,
         max_new_tokens=args.max_new_tokens,
         moe_kernel=args.moe_kernel,
@@ -118,10 +130,12 @@ def main(argv: list[str] | None = None) -> None:
     save_reference(logits, reference_path)
     print(f"wrote {reference_path}")
 
-    comparison = (
-        compare_top_k_agreement(logits, load_reference(args.compare_reference))
-        if args.compare_reference is not None
-        else {}
+    reference = load_reference(args.compare_reference) if args.compare_reference else None
+    comparison = compare_top_k_agreement(logits, reference) if reference is not None else {}
+    gap_split = (
+        aggregate_gap_split(compare_gap_split(logits, reference).values())
+        if reference is not None
+        else None
     )
 
     results_path = args.output_dir / f"{args.run_label}-results.json"
@@ -133,6 +147,8 @@ def main(argv: list[str] | None = None) -> None:
                 "dtype": args.dtype,
                 "moe_kernel": args.moe_kernel,
                 "moe_layers_patched": moe_layers_patched,
+                "prompt_set": args.prompt_set,
+                "gap_split": None if gap_split is None else gap_split.to_dict(),
                 **asdict(summary),
                 "reference_comparison": {key: asdict(value) for key, value in comparison.items()},
             },
@@ -145,6 +161,18 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(
             f"{args.moe_kernel} logits disagree with {args.compare_reference} -- see {results_path}"
         )
+    if args.prompt_set == "gate" and gap_split is not None:
+        if gap_split.positions < MIN_GATE_POSITIONS:
+            raise SystemExit(
+                f"gate compared only {gap_split.positions} positions, fewer than the "
+                f"{MIN_GATE_POSITIONS} an at-scale claim needs -- see {results_path}"
+            )
+        if gap_split.large_gap_disagreements > 0:
+            raise SystemExit(
+                f"{args.moe_kernel} flips {gap_split.large_gap_disagreements} position(s) the "
+                f"reference was confident about (widest gap {gap_split.max_disagreement_gap:.3f}) "
+                f"-- a bug, not a near-tie; see {results_path}"
+            )
 
 
 if __name__ == "__main__":
