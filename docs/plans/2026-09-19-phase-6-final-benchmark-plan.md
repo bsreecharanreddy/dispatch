@@ -604,11 +604,11 @@ GATE_PROMPTS: tuple[str, ...] = (
 Apply these five edits.
 
 (a) Add imports. Replace
-```python
+```text
 from dispatch.benchmark.harness import generate_with_timings, load_model
 ```
 with
-```python
+```text
 from dispatch.benchmark.agreement import (
     MIN_GATE_POSITIONS,
     aggregate_gap_split,
@@ -619,12 +619,12 @@ from dispatch.benchmark.harness import generate_with_timings, load_model
 ```
 
 (b) Add the flag. Replace
-```python
+```text
     parser.add_argument(
         "--compare-reference",
 ```
 with
-```python
+```text
     parser.add_argument(
         "--prompt-set",
         choices=["default", "gate"],
@@ -636,16 +636,16 @@ with
 ```
 
 (c) Select the prompts. Replace
-```python
+```text
         prompts=DEFAULT_PROMPTS,
 ```
 with
-```python
+```text
         prompts=list(GATE_PROMPTS) if args.prompt_set == "gate" else DEFAULT_PROMPTS,
 ```
 
 (d) Compute the gap split once, from one loaded reference. Replace
-```python
+```text
     comparison = (
         compare_top_k_agreement(logits, load_reference(args.compare_reference))
         if args.compare_reference is not None
@@ -653,7 +653,7 @@ with
     )
 ```
 with
-```python
+```text
     reference = load_reference(args.compare_reference) if args.compare_reference else None
     comparison = compare_top_k_agreement(logits, reference) if reference is not None else {}
     gap_split = (
@@ -663,20 +663,20 @@ with
     )
 ```
 and in the results dict, after `"moe_layers_patched": moe_layers_patched,` add
-```python
+```text
                 "prompt_set": args.prompt_set,
                 "gap_split": None if gap_split is None else gap_split.to_dict(),
 ```
 
 (e) Enforce the gate after the existing `mutual_top_k` check. Replace
-```python
+```text
     if not all(value.mutual_top_k for value in comparison.values()):
         raise SystemExit(
             f"{args.moe_kernel} logits disagree with {args.compare_reference} -- see {results_path}"
         )
 ```
 with
-```python
+```text
     if not all(value.mutual_top_k for value in comparison.values()):
         raise SystemExit(
             f"{args.moe_kernel} logits disagree with {args.compare_reference} -- see {results_path}"
@@ -762,23 +762,23 @@ Expected: the two new tests FAIL with `TypeError: generate_with_timings() got an
 - [ ] **Step 3: Implement**
 
 `src/dispatch/benchmark/harness.py`: in `generate_with_timings`' signature, add `ignore_eos: bool = False,` after `clock_fn: Callable[[], float] = time.perf_counter,`; and replace
-```python
+```text
             if eos_token_id is not None and next_token.item() == eos_token_id:
 ```
 with
-```python
+```text
             if not ignore_eos and eos_token_id is not None and next_token.item() == eos_token_id:
 ```
 
 `src/dispatch/benchmark/metrics.py`: rename `_percentile` to `percentile` (its definition and its two call sites inside `summarize`). No other module imports it (`scripts/gpu/phase4_concurrency.py` has its own private copy; leave it).
 
 `scripts/run_baseline.py`: (a) add `ignore_eos: bool = False,` after `moe_kernel: str = "none",` in `run_baseline`'s signature; (b) replace
-```python
+```text
             model, tokenizer, prompt, max_new_tokens=max_new_tokens, device=device
         )
 ```
 with
-```python
+```text
             model,
             tokenizer,
             prompt,
@@ -788,7 +788,7 @@ with
         )
 ```
 (c) after the `--max-new-tokens` argument add
-```python
+```text
     parser.add_argument(
         "--ignore-eos",
         action="store_true",
