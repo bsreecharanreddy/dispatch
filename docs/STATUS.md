@@ -564,6 +564,8 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 3 (ignore_eos, public percentile)**: the harness can generate exactly N tokens past EOS, matching vllm bench serve --ignore-eos, so dispatch's concurrency-1 reference row is comparable.
 
+- **Task 4 (engine contract + dispatch adapter)**: seeded inputs, fp32 reference, fused gate+up layout, and dispatch's kernels behind one MoEEngine contract; uniform and zipf cases share x and weights so only routing differs.
+
 ## Next step
 
 Phase 5b is done: root cause fixed, real numbers measured, both
