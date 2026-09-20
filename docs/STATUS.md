@@ -715,6 +715,14 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       matches tonic 0.14's generated `ModelServer` trait after the
       tonic-prost-build split -- compiled and passed on the first try, no
       further correction needed. `cargo test`/`fmt`/`clippy` clean.
+- [x] Task 7, 2026-09-20: router HTTP surface (`router/src/app.rs`:
+      `/generate`, `/healthz`, `/readyz`, `/metrics`) and `main.rs` wiring
+      (env-configured: `MODEL_SERVER_ENDPOINT`, `ROUTER_LISTEN_ADDR`,
+      `ROUTER_QUEUE_CAPACITY`). All 3 tests passed on the first try.
+      Manually smoke-tested end to end (stub model server + real router
+      binary, both running): `POST /generate` returned real streamed text
+      and timing, `/metrics` showed real recorded TTFT/inter-token-latency/
+      queue-depth/requests-total values. `cargo test`/`fmt`/`clippy` clean.
 
 ## Next step
 
