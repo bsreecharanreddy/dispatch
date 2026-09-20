@@ -789,6 +789,31 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       test from Task 7. `make check` green throughout (Rust: `cargo
       test`/`fmt`/`clippy` all clean, 9 tests; Python: 268 tests, `mypy
       --strict` and `ruff` clean).
+- [x] Task 11, 2026-09-20: K8s manifests (`k8s/namespace.yaml`,
+      `router-deployment.yaml`, `model-server-external.yaml`,
+      `prometheus.yaml`, `grafana.yaml`) and `scripts/run_kind_demo.sh`,
+      fully rehearsed end to end against the stub responder (no GPU):
+      `kind create cluster` -> build and `kind load` both images -> apply
+      manifests -> both rollouts succeed -> port-forward -> a real
+      `POST /generate` through the router pod, the `ExternalName` Service,
+      and `host.docker.internal` (Task 1's verified finding) reached the
+      locally-running stub server and returned real generated text ->
+      Prometheus's own API confirmed it was actually scraping the
+      router's real `dispatch_router_requests_total` (value 1, matching
+      the one request fired) -> Grafana's `/api/health` responded ->
+      `kind delete cluster` torn down cleanly, no orphaned processes.
+      One deviation from the plan's own snippet, applied before the
+      rehearsal rather than found by it: the router's Task 10 startup
+      retry loop can take up to 30s, so the router Deployment's liveness/
+      readiness probes needed `periodSeconds`/`failureThreshold` past
+      the plan's original `initialDelaySeconds: 2` alone, or K8s would
+      restart the pod mid-retry; set to tolerate the full 30s window.
+      Confirmed live: the rehearsal's rollout succeeded on the first try
+      with the wider probes. `ExternalName`'s pure-DNS semantics (no
+      port remapping) mean this same manifest set, unmodified, is what
+      Task 13 points at the real SSH tunnel instead of the local stub.
+
+## Next step
 
 Phases 3 (PR #3), 4 (PR #4), 5a (PR #5), 5b (PR #6), and 6 (PR #8) are all
 merged, each on its own branch per the one-branch-per-phase convention.
