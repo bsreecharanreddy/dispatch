@@ -224,11 +224,33 @@ def test_a_run_without_a_reference_records_no_gap_split(
     )
     monkeypatch.setattr(run_baseline_module, "summarize", lambda runs: FAKE_SUMMARY)
 
-    main(["--prompt-set", "gate", "--output-dir", str(tmp_path), "--run-label", "ref-run"])
+    main(["--prompt-set", "default", "--output-dir", str(tmp_path), "--run-label", "ref-run"])
 
     results = json.loads((tmp_path / "ref-run-results.json").read_text())
     assert results["gap_split"] is None
     assert (tmp_path / "ref-run-reference.safetensors").exists()
+
+
+def test_gate_without_a_reference_is_refused_before_spending_any_gpu_time(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """--prompt-set gate promises to enforce the gap-split rule; without
+    --compare-reference it had nothing to enforce against and silently
+    passed. It must refuse instead of pretending to have gated anything."""
+    run_baseline_mock = _fake_run_baseline(_gate_pair(600, {})[1], 0)
+    calls: list[object] = []
+
+    def recording_run_baseline(*args: object, **kwargs: object) -> object:
+        calls.append(1)
+        return run_baseline_mock(*args, **kwargs)
+
+    monkeypatch.setattr(run_baseline_module, "run_baseline", recording_run_baseline)
+    monkeypatch.setattr(run_baseline_module, "summarize", lambda runs: FAKE_SUMMARY)
+
+    with pytest.raises(SystemExit, match="requires --compare-reference"):
+        main(["--prompt-set", "gate", "--output-dir", str(tmp_path), "--run-label", "ref-run"])
+
+    assert calls == []  # refused before the model was even loaded
 
 
 @pytest.mark.slow

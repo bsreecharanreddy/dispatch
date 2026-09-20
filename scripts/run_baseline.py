@@ -109,7 +109,10 @@ def main(argv: list[str] | None = None) -> None:
         "--prompt-set",
         choices=["default", "gate"],
         default="default",
-        help="'gate' runs Phase 6's larger fixed prompt set and enforces its gap-split rule",
+        help=(
+            "'gate' runs Phase 6's larger fixed prompt set and enforces its gap-split "
+            "rule; requires --compare-reference"
+        ),
     )
     parser.add_argument(
         "--compare-reference",
@@ -118,6 +121,15 @@ def main(argv: list[str] | None = None) -> None:
         help="logits file from a stock run of the same model and prompts",
     )
     args = parser.parse_args(argv)
+    if args.prompt_set == "gate" and args.compare_reference is None:
+        # The enforcement below only ever fires when gap_split is not None,
+        # which requires --compare-reference. Without it, --prompt-set gate
+        # silently ran the larger prompt set and enforced nothing -- refuse
+        # before spending any GPU time on a run that can't do what it says.
+        raise SystemExit(
+            "--prompt-set gate enforces the gap-split rule against a reference, so it "
+            "requires --compare-reference; pass one or use --prompt-set default"
+        )
 
     dtype: torch.dtype = getattr(torch, args.dtype)
     runs, logits, moe_layers_patched = run_baseline(
