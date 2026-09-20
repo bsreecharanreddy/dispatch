@@ -676,6 +676,28 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       compile, not guessed. `tonic::async_trait` (planned for later tasks'
       mock gRPC servers) is unaffected -- still re-exported at tonic's
       crate root, confirmed the same way.
+- [x] Task 3, 2026-09-20: Python side of the contract --
+      `dispatch.serving.model_server` (`Responder` protocol, `StubResponder`,
+      `ModelServerServicer`, `serve`) and `scripts/run_model_server.py`.
+      `make check` green (267 tests, up from 262; lint and `mypy --strict`
+      clean), but getting there needed three real mypy fixes beyond the
+      plan's own code: (1) `--python_out` alone generates message classes
+      via runtime reflection, invisible to mypy without the matching
+      `--pyi_out` stub, now part of `scripts/gen_proto.py`; (2) the plan's
+      `ignore_errors = true` override for `dispatch.proto.*` only suppresses
+      errors *inside* that module, not "call to untyped function" errors at
+      its *importers* -- switched to `ignore_missing_imports` +
+      `follow_imports = "skip"`, the same pattern already used for
+      triton/deep_ep/vllm/sglang; (3) that per-module override only applies
+      when a module is *imported*, not when mypy walks `src` and hits it
+      directly as a root target, so the two generated files also needed an
+      explicit `[tool.mypy] exclude` pattern. All three confirmed by reading
+      mypy's actual error output and its own documented `follow_imports`
+      semantics, not guessed. Two intentional forward references to Task 9's
+      not-yet-existing `scripts/gpu/phase7_kernel_responder.py` are marked
+      with `# type: ignore` comments Task 9 is expected to remove (mypy's
+      `warn_unused_ignores` will flag them once that module exists and is
+      typed).
 
 ## Next step
 

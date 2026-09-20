@@ -17,6 +17,7 @@ dependencies = [
     "safetensors>=0.8.0",
     # Linux-only: triton publishes manylinux wheels and nothing else.
     "triton>=3.8.0; sys_platform == 'linux'",
+    "grpcio>=1.84.0",
 ]
 
 # Runtime dependencies (torch, triton, the serving stack) get added as each
@@ -34,12 +35,19 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.16.7",
     "types-requests>=2.33.0.20260906",
+    "grpcio-tools>=1.84.0",
+    "types-grpcio>=1.83.0.20260730",
 ]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+extend-exclude = [
+    "src/dispatch/proto/dispatch_pb2.py",
+    "src/dispatch/proto/dispatch_pb2.pyi",
+    "src/dispatch/proto/dispatch_pb2_grpc.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "PL", "RUF", "C90"]
@@ -72,6 +80,12 @@ python_version = "3.12"
 strict = true
 warn_unreachable = true
 mypy_path = "src"
+# Generated protobuf/grpc code, excluded from direct checking -- the
+# dispatch.proto.* override below (follow_imports="skip") only changes how
+# this module is treated when *imported*, not when mypy walks `src` and
+# hits it directly as a root target; found live when the override alone
+# still left 10 errors inside these exact two files.
+exclude = ["^src/dispatch/proto/dispatch_pb2(_grpc)?\\.pyi?$"]
 
 # Triton isn't installed at all on macOS. Skipping it makes mypy treat it as
 # Any everywhere, so the Mac and Linux CI give the same answer.
@@ -93,6 +107,20 @@ follow_imports = "skip"
 # triton and deep_ep above.
 [[tool.mypy.overrides]]
 module = ["vllm", "vllm.*", "sglang", "sglang.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# Generated protobuf/grpc code -- dispatch_pb2.py's message classes have a
+# .pyi (gen_proto.py's --pyi_out), but dispatch_pb2_grpc.py's service/stub/
+# servicer classes have no official pyi generator and stay untyped, which
+# under --strict makes every call into them a "call to untyped function"
+# error at the caller. follow_imports="skip" (not ignore_errors, which only
+# suppresses errors *inside* the module, not "untyped call" errors at
+# *importers*) makes mypy treat the whole module as Any, same boundary as
+# triton/deep_ep/vllm/sglang above -- found live when ignore_errors alone
+# still left 14 real errors in files that import this module.
+[[tool.mypy.overrides]]
+module = ["dispatch.proto.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
