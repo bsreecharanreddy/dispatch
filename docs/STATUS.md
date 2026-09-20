@@ -698,6 +698,10 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       with `# type: ignore` comments Task 9 is expected to remove (mypy's
       `warn_unused_ignores` will flag them once that module exists and is
       typed).
+- [x] Task 4, 2026-09-20: router admission queue (`router/src/queue.rs`) --
+      a capacity-1 `tokio::sync::Semaphore` plus an `AtomicUsize` waiting
+      counter for the `queue_depth` gauge Task 5 wires up. `cargo test`,
+      `cargo fmt`, `cargo clippy -D warnings` all clean.
 
 ## Next step
 
