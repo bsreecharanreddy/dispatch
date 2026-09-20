@@ -18,6 +18,13 @@ dependencies = [
     # Linux-only: triton publishes manylinux wheels and nothing else.
     "triton>=3.8.0; sys_platform == 'linux'",
     "grpcio>=1.84.0",
+    # The generated dispatch_pb2.py imports google.protobuf directly at
+    # runtime -- previously only available transitively via the dev-only
+    # grpcio-tools, so a --no-dev install (the model server's Docker
+    # image) had grpcio but not protobuf. Found live: a docker-compose
+    # run of the built image raised ModuleNotFoundError: No module named
+    # 'google' on startup.
+    "protobuf>=7.36.2",
 ]
 
 # Runtime dependencies (torch, triton, the serving stack) get added as each

@@ -760,6 +760,35 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       exact forward reference became unused once this module landed, and
       removed both, exactly as predicted. `make check` green throughout
       (268 tests, up from 267; the new `gpu` test skips cleanly off-GPU).
+- [x] Task 10, 2026-09-20: `docker/router.Dockerfile`,
+      `docker/model-server.Dockerfile`, `docker-compose.yml` -- both images
+      build and the full stack works end to end, but not on the first
+      attempt. Three real bugs found and fixed against the actual built
+      images, none visible from reading the Dockerfiles alone: (1)
+      `pyproject.toml` declares `readme = "README.md"`, which `uv sync`'s
+      build step needs but the model-server Dockerfile never copied in --
+      `uv sync` failed outright; (2) the generated `dispatch_pb2.py`
+      imports `google.protobuf` directly at runtime, previously available
+      only transitively via the dev-only `grpcio-tools` -- a `--no-dev`
+      image had `grpcio` but not `protobuf`, `ModuleNotFoundError` on
+      startup; added `protobuf>=7.36.2` (the version already resolved in
+      `uv.lock`) as an explicit runtime dependency; (3) `uv run` (no
+      `--no-dev`) re-syncs and reinstalls dev tools (mypy, ruff, pytest)
+      into the container on every start despite the image being built
+      with `--no-dev` -- switched the entrypoint to `uv run --no-dev`.
+      A fourth issue surfaced once the first three were fixed and the
+      stack actually ran: the router's one-shot startup connect raced the
+      model server's own startup and exited immediately on the first
+      failure (`depends_on` only waits for the container to start, not
+      for the app inside it to be ready) -- fixed with a bounded 30x1s
+      retry loop in `main.rs` (`connect_with_retry`), plus
+      `restart: on-failure` on the compose service as defense in depth.
+      Verified: `POST /generate` through the containerized router and
+      model server returned real streamed text and timing, `/metrics`
+      showed real recorded values, matching the earlier bare-binary smoke
+      test from Task 7. `make check` green throughout (Rust: `cargo
+      test`/`fmt`/`clippy` all clean, 9 tests; Python: 268 tests, `mypy
+      --strict` and `ruff` clean).
 
 Phases 3 (PR #3), 4 (PR #4), 5a (PR #5), 5b (PR #6), and 6 (PR #8) are all
 merged, each on its own branch per the one-branch-per-phase convention.

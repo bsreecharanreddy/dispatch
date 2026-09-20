@@ -1,0 +1,25 @@
+services:
+  model-server:
+    build:
+      context: .
+      dockerfile: docker/model-server.Dockerfile
+    command: ["--responder", "stub", "--port", "50051"]
+    ports:
+      - "50051:50051"
+
+  router:
+    build:
+      context: .
+      dockerfile: docker/router.Dockerfile
+    environment:
+      MODEL_SERVER_ENDPOINT: "http://model-server:50051"
+      ROUTER_LISTEN_ADDR: "0.0.0.0:8080"
+      ROUTER_QUEUE_CAPACITY: "1"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - model-server
+    # depends_on only waits for the container to *start*, not for the
+    # model server to finish syncing and bind its port -- the router's own
+    # startup retry (main.rs) is the primary fix; this is defense in depth.
+    restart: on-failure
