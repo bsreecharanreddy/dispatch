@@ -78,7 +78,7 @@ contestant, with the at-scale correctness gate this project owed since
 Phase 5a finally measured (97.1-97.3% top-1 agreement at 1,036 positions,
 zero large-gap disagreements) (Phase 6).
 
-**246 tests, `make check` green throughout Phase 6** (lint, `mypy --strict`,
+**262 tests, `make check` green throughout Phase 6** (lint, `mypy --strict`,
 and the full non-GPU suite) — GPU-dependent tests are marked and excluded
 from CI by design, then run for real on rented hardware every phase.
 

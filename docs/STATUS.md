@@ -584,8 +584,43 @@ machine) -- that is Task 10's first job on the pod.
 
 - **Task 13 (engine reference), SGLang done; Task 14 (evidence + teardown) done, 2026-09-19/20**: SGLang served the real model cleanly across all 4 concurrencies: out_tok/s 108.6 (c1) -> 207.5 (c4) -> 405.5 (c16) -> 1180.4 (c64); p50 TTFT 54.9ms -> 135.8ms; \$/Mtok 2.10 -> 0.19. One fix needed: the serving driver's subprocess PATH had vllm-venv before sglang-venv, so the bare `python` used to launch `sglang.launch_server` resolved to the wrong interpreter (no sglang installed) -- a pod-local invocation-order fix, not a code change. All 31 non-safetensors evidence files pulled via rsync over direct SSH (not the PTY-only proxy runbook 5b needed -- this pod exposed both) and diffed byte-for-byte identical against the pod's own file list before the pod was terminated. **Total measured cost: \$4.5448 of the \$10 cap** (RunPod's own billing API, not rate x duration), pod `97jlyai5sowyeq` terminated and confirmed gone (404 on lookup).
 - [x] Task 15, 2026-09-20: findings doc, runbook, this update.
+- **Task 15 step 5 (whole-branch review), 2026-09-20**: a full-branch review
+  of this session's own new code (not the paid GPU results, which stand as
+  measured) found 20 real issues, all fixed, each its own commit: a
+  `dispatch-persistent`+int8 combination that crashed the whole race process
+  uncaught instead of recording a refusal (08950f1); `merge`'s default
+  output filename collided with its own default input glob, so a second
+  merge in a results directory would try to re-ingest its own prior summary
+  (1c39ccf), and a duplicate measurement for the same cell was silently
+  dropped instead of refused (77f10ae); non-deterministic (hash-seed
+  dependent) race-table ordering for token counts outside the registered
+  set, and `DEFAULT_BLOCK_M` duplicated across three modules with nothing
+  tying them together (3853e98); a required `--tuning-label` silently
+  ignored for `dispatch-*` engines (96727cb); SGLang's setup always
+  published `dtype="bfloat16"` regardless of the race's actual dtype
+  (70298c1); `serving_bench.summarize_bench_result` raised a raw
+  `KeyError`/`StatisticsError` instead of its own intended `ValueError`
+  refusal on a malformed or schema-drifted result, and divided by zero on a
+  zero-throughput result (c9f73ab); a zero-position `GapSplitAgreement`
+  raised an unhandled `ZeroDivisionError` instead of a clear refusal
+  (345f7c6); the engine-reference driver lost all evidence and leaked a
+  file handle if the server process failed to launch at all, and never
+  confirmed a killed server actually exited (d1af4bd); its trace file was a
+  fixed size that only covered the hardcoded default `--concurrencies`
+  (919ac30); `--prompt-set gate` silently enforced nothing when
+  `--compare-reference` was omitted, despite promising to (557ba01); plus
+  two duplicated-logic cleanups, one shared `installed_version()` instead of
+  two identical copies (08a81fe) and one shared int8-backend-capability
+  table instead of an inline if/elif (076c4cd). `make check` green
+  throughout (262 tests, up from 246; lint and `mypy --strict` clean). Three
+  commits from Task 10 (`3acf14c`, `c31d1f4`, `2536764`) were flagged as
+  having changed non-docs files without `docs/STATUS.md` staged in the same
+  commit -- this repo's own rule, and its own hook's exact purpose; left as
+  a documented gap rather than rewritten, since none of the three are
+  pushed anywhere else yet but rewriting local history to fix a paperwork
+  gap risked more than the gap itself.
 
-**Phase 6 is complete, 2026-09-20.** `make check` green throughout (246
+**Phase 6 is complete, 2026-09-20.** `make check` green throughout (262
 tests, lint and `mypy --strict` clean). **On this GPU (L40) and these
 shapes, vLLM's and SGLang's own fused-MoE beat dispatch's kernels at their
 shipped default config at nearly every routed-expert shape tested, in both

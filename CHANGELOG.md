@@ -19,7 +19,10 @@ once a phase's exit criteria are actually met).
   and int8 all agree with the stock reference at 1,036 positions
   (97.1-97.3% top-1 agreement, zero large-gap disagreements against a
   pre-registered 1.0-logit threshold), superseding Phase 5a's 29-position
-  claim for these configs — `make check` green throughout (246 tests).
+  claim for these configs — `make check` green throughout (262 tests,
+  after a whole-branch review found and fixed 20 real issues in this
+  session's own new code, none affecting the measured GPU results;
+  `docs/STATUS.md`, "Task 15 step 5").
   **The kernel race is a real, disclosed loss**: vLLM 0.29.0's and SGLang
   0.5.20's own fused-MoE beat dispatch's kernels at their shipped default
   config at nearly every tested shape, bf16 and int8 alike, on the
