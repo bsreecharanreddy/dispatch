@@ -12,6 +12,54 @@ deletes its own evidence is not a retraction.
 No phase shipped yet (`v0.1.0` is still the scaffold version; a tag lands
 once a phase's exit criteria are actually met).
 
+- **Phase 6 (final benchmark vs. vLLM and SGLang) complete**, 2026-09-20,
+  branch `phase-6-final-benchmark` (PR pending)
+  (`docs/plans/2026-09-19-phase-6-final-benchmark-plan.md`). Ran the
+  at-scale correctness gate Phase 5b flagged as owed: naive, persistent
+  and int8 all agree with the stock reference at 1,036 positions
+  (97.1-97.3% top-1 agreement, zero large-gap disagreements against a
+  pre-registered 1.0-logit threshold), superseding Phase 5a's 29-position
+  claim for these configs — `make check` green throughout (262 tests,
+  after a whole-branch review found and fixed 20 real issues in this
+  session's own new code, none affecting the measured GPU results;
+  `docs/STATUS.md`, "Task 15 step 5").
+  **The kernel race is a real, disclosed loss**: vLLM 0.29.0 beats
+  dispatch's kernels at every one of the 28 measured (precision, token
+  count, distribution) combinations, bf16 and int8 alike, on the identical
+  GPU, model, and `torch==2.13.0`/`triton==3.7.1` build every contestant
+  shared — the gap runs 2.4-4.1x slower at 1 token, narrowing to
+  ~1.1-1.3x slower at 128 tokens and up, never closing. dispatch does beat
+  SGLang specifically at 128 and 512 tokens, both precisions — a real
+  result against one contestant, not the other. vLLM and SGLang both
+  served the real model correctly across
+  concurrency 1/4/16/64 (vLLM ~6-9% ahead of SGLang throughout, e.g.
+  1269.2 vs. 1180.4 output tok/s at concurrency 64); dispatch has no
+  served, batched engine of its own to place in that same ranked table
+  (design doc §6 amended), so its concurrency-1 numbers (naive: 21.04
+  tok/s, ~1.8x stock's 11.87, consistent with Phase 1) are reported
+  alongside it, labeled non-comparable. Full tuning of vLLM's and
+  SGLang's own MoE tuners was not run: a live check found each takes
+  ~18 minutes per token count and saves its config only after every
+  requested count finishes (confirmed by starting a real run, watching it
+  reach 29% of the first of 7 batch sizes after 5 minutes, and killing it
+  for zero usable output), so the full matrix would have cost several
+  times the phase's budget; both engines are reported at default
+  configuration only, a disclosed limitation decided with the user at a
+  $4.22 checkpoint. Six real fixes shipped mid-session: a
+  `DeepseekForCausalLM`-to-`DeepseekV2ForCausalLM` config shim both
+  tuners needed (neither recognizes the model's real V1 architecture), a
+  published `ServerArgs` SGLang's `fused_experts` requires
+  (`config namespace 'exec' not published`), a repeatability check
+  widened for `index_add_`'s non-bitwise-deterministic `atomicAdd` on
+  CUDA, a derived end-to-end latency for vLLM 0.29.0's `--save-detailed`
+  schema (which carries no per-request latency field at all), a
+  subprocess `PATH`-order fix for launching SGLang's server, and a
+  self-matching `pkill -f` pattern that had been silently killing its own
+  SSH session (fixed with the `[b]enchmark_moe.py` bracket trick). Cost:
+  **$4.5448** of a $10 cap, measured from RunPod's billing API rather
+  than rate x duration. Full account:
+  `docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`;
+  runbook: `docs/runbooks/phase-6-final-benchmark.md`.
 - **Phase 5b (speculative decoding) complete**, 2026-09-18, merged via PR #6
   (`docs/plans/2026-09-17-phase-5b-speculative-decoding-plan.md`). A shared
   propose/verify/accept/rollback loop with two drafters (a 7B draft model,
@@ -34,9 +82,12 @@ once a phase's exit criteria are actually met).
   2/4 prompts in one process and 3/4 in another. Root-caused by a
   batch-width probe and a 10-trial determinism probe to a near-tied logit
   under the int8 kernel's floating-point precision, not a logic error.
-  Open, deliberately unaudited: Phase 5a's "perfect top-1/top-k agreement"
-  used the same kernel and a single-run check that could not see this.
-  Two findings-doc figures were also corrected after re-verifying against
+  Phase 5a's "perfect top-1/top-k agreement" used the same kernel but is a
+  small sample (29 positions, one run, `transformers==4.57.6`, so not
+  affected by the RoPE bug; its logit differences were finite and
+  non-zero, so it was not a degenerate-output pass) -- too few positions
+  to rule this sensitivity out, so Phase 6's correctness gate re-checks
+  agreement at scale rather than leaning on 5a's number. Two findings-doc figures were also corrected after re-verifying against
   the results JSONs (see the git history of the findings doc). Cost:
   **$12.26** across both sessions against a $10 cap that one pod exceeded
   and that was raised to $20 with disclosure. Also: `docs/findings/` split

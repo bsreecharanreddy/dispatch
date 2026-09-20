@@ -486,22 +486,180 @@ $10.8848; `5ufi854zxkfwbz` (A40) $0.2022; `d2h1sgmr5wjssv` (A40, where
 the real baseline/gates/k-sweep ran) $0.49. All four pods stopped or
 terminated.
 
-**Open question, flagged for the project owner, not audited here**:
-this session's root-cause work found concrete evidence of near-tie
-floating-point sensitivity in `grouped_matmul_int8`, the same quantized
-kernel Phase 5a's own "perfect top-1/mutual-top-k agreement" claim was
-measured against. That claim may not be wrong, but the single-run
-top-k check it relied on would not have caught this specific failure
-mode. Re-auditing Phase 5a was out of this task's scope.
+**Scope of Phase 5a's agreement claim (resolved as an input to Phase 6,
+2026-09-18)**: this session's root-cause work found concrete evidence of
+near-tie floating-point sensitivity in `grouped_matmul_int8`, the same
+quantized kernel Phase 5a's "perfect top-1/mutual-top-k agreement" claim
+was measured against. Checked against the record, without new GPU spend:
+Phase 5a's GPU session ran on `transformers==4.57.6` (a pod-side
+override of this repo's `>=5.17.0` floor), the version the RoPE
+`inv_freq` bug was never observed on, and its `max_abs_diff` values
+(2.125 / 1.906 / 1.344, one per prompt) are finite and differ per
+prompt, so it was not a degenerate-output pass. (That 4.57.6 is
+unaffected was inferred from those numbers, not tested directly.) What
+does stand: the check covered 29 positions in a single run, quantized
+vs. naive bf16 -- too small a sample to rule out the 0.1-0.4 logit-gap
+near-ties 5b found. Decision: do not re-rent a GPU just to re-audit 5a;
+Phase 6's own correctness gate measures agreement at scale on the exact
+config being benchmarked, and 5a's agreement figure is not to be quoted
+in the head-to-head as more than "true on a small sample".
+
+## Phase 6 progress
+
+**Design approved, 2026-09-18:**
+`docs/design/2026-09-18-phase-6-final-benchmark.md`, on branch
+`phase-6-final-benchmark`. No implementation plan or code yet, no GPU
+spent. Decided in brainstorming:
+
+- **Kernel-level race plus a labeled engine reference, not an end-to-end
+  race.** Design doc §6 assumed a dispatch server for the serving
+  benchmark to target; none exists (the engine is an in-process HF eager
+  loop), so an end-to-end race would measure that gap, not the kernel.
+  §6 is amended to say so. A real server belongs to Phase 7.
+- **One L40, ~$10 cap** (same GPU class as Phase 1 and 5a's kernel
+  numbers). Kernel race: dispatch naive/persistent vs. vLLM and SGLang
+  fused-MoE, uniform and zipf routing, bf16 and weight-only int8. Engine
+  reference: vLLM and SGLang serving the full model, concurrency 1/4/16/64,
+  dispatch at concurrency 1 only.
+- **Checked live 2026-09-18:** SGLang serves `DeepseekForCausalLM` (V1);
+  both engines' fused-MoE accept `use_int8_w8a16` + `per_channel_quant`;
+  SGLang's fused-MoE code was recently reorganized, so engine versions get
+  pinned and each engine sits behind one adapter.
+- **Stage 1 blocks the rest:** the at-scale correctness gate STATUS owes
+  from 5a/5b, with a large-gap disagreement threshold fixed in the plan
+  from 5b's near-tie data before any GPU time.
+
+**Implementation plan written, 2026-09-19:**
+`docs/plans/2026-09-19-phase-6-final-benchmark-plan.md`, 15 tasks. Its CPU-testable
+code (gap-split classifier, gate prompts, engine adapters, race driver,
+summarizer, serving-benchmark helpers) was built and verified in a scratch copy
+of the repo before being written into the plan: 236 tests, ruff and
+`mypy --strict` clean. Only what the plan says is verified was verified; the real
+vLLM and SGLang engines have **not** been exercised (neither installs on this
+machine) -- that is Task 10's first job on the pod.
+
+- **Gate rule pre-registered in the plan, before any GPU time:** a top-1
+  disagreement fails only where the reference's top-1/top-2 logit gap exceeds
+  1.0 (2.5x Phase 5b's widest measured near-tie of 0.4); minimum 500 compared
+  positions (the 16 fixed prompts give 1,036 with the real tokenizer); a
+  stock-vs-stock control measures the gate's own noise floor; a failing config
+  is excluded from the race rather than halting the session. A test pins the
+  threshold so it cannot be loosened after seeing a run.
+- **Design assumptions the plan's live checks corrected (2026-09-19):** vllm
+  0.29.0 and sglang 0.5.20 both pin `torch==2.13.0` with compatible transformers
+  pins, so one shared engines venv is possible (the design assumed conflicting
+  pins) and all contestants can share one Triton compiler; SGLang's own tuner
+  does not list V1's `DeepseekForCausalLM`, so the plan tunes it through a
+  config-only architecture shim, with a bounded fallback to untuned; the
+  per-engine bare-GEMM diagnostic is dropped (the fused paths expose no separable
+  single-GEMM entry point). Design amended accordingly.
+- **Tuning rule pre-registered:** every contestant is tuned under uniform routing
+  only, then timed under both distributions; dispatch's tuned tile size is picked
+  on uniform results and reused for zipf (a test asserts the choice never looks
+  at zipf).
+
+- **Task 1 (gap-split classifier)**: dispatch.benchmark.agreement splits every top-1 disagreement by the reference's top1-top2 logit gap; threshold 1.0 and 500-position floor pre-registered in the plan and pinned by a test.
+
+- **Task 2 (gate prompt set + run_baseline gate mode)**: --prompt-set gate runs 16 fixed prompts (1,036 positions with the real tokenizer) and fails on any large-gap flip or fewer than 500 positions.
+
+- **Task 3 (ignore_eos, public percentile)**: the harness can generate exactly N tokens past EOS, matching vllm bench serve --ignore-eos, so dispatch's concurrency-1 reference row is comparable.
+
+- **Task 4 (engine contract + dispatch adapter)**: seeded inputs, fp32 reference, fused gate+up layout, and dispatch's kernels behind one MoEEngine contract; uniform and zipf cases share x and weights so only routing differs.
+
+- **Task 5 (vLLM/SGLang adapters + registry)**: each engine behind one adapter calling its own fused_experts with fixed routing; verified against eager fakes only -- the real engines are not exercised until the pod (Task 10).
+
+- **Task 6 (race summarizer)**: the pre-registered tuning rule as code -- dispatch's tuned tile size is picked on uniform routing only and reused for zipf; refused results never reach a table.
+
+- **Task 7 (race driver)**: prepare/run/merge; seeded inputs and fp32 references written once and loaded by every contestant; a disagreeing engine is refused, not timed, and its record is written before the non-zero exit.
+
+- **Task 8 (serving-benchmark helpers)**: vllm bench serve / server commands, a summarizer that refuses failed requests and non-64-token outputs, cost per million tokens from the measured GPU rate, and a driver that always tears its server down.
+
+- **Task 9 (real-engine gate)**: gpu-marked tests check every contestant against the fp32/dequantized reference on real dims, plus a mutation test (swapped gate/up must fail); skipped off-GPU, run on the pod in Task 10.
+
+- **Task 10 (pod setup + real-engine verification), 2026-09-19**: L40 pod `97jlyai5sowyeq` (Secure, US-KS-2, $0.82/hr, driver 580.178.04, CUDA 13.0), created 17:54:26Z once the L40 came back in stock. Real-engine gate passed for every contestant: dispatch naive/persistent and vLLM 36 passed, SGLang 14 passed -- each engine meets the fp32 (bf16) or dequantized (int8) reference at 1/64/512 tokens under both routing distributions, and every mutation test fails as required. `vllm bench serve` flags all present in the installed 0.29.0. Deviations from the plan, all recorded: (1) vllm 0.29.0 and sglang 0.5.20 do not co-install (compressed-tensors 0.17.0 vs 0.18.0), so one venv per engine, both on torch 2.13.0+cu130 and triton 3.7.1, so the compiler is still shared; sglang additionally needs --prerelease=allow (cuda-tile 1.6.0rc5, a flash-attn-4 beta); (2) the venvs live on the pod's local disk, not /workspace, a network filesystem where import sglang took minutes; (3) SGLang needs ninja on PATH and a published ServerArgs, fixed in the adapter (c31d1f4); (4) dispatch's combine step (index_add_, atomicAdd on CUDA) is not bitwise repeatable: two identical calls differ by one bf16 ulp on about 24% of elements, so the repeatability test now checks within rounding (2536764). Evidence from the pod is committed in Task 14.
+
+- **Task 12 (kernel race), 2026-09-19 -- tuner scope decision**: vLLM's and SGLang's own MoE tuners are single-worker-sequential over ~1,920 Triton configs per token count (~18 min each, confirmed live by running vLLM's tuner) and write their config file once, only after every requested token count finishes -- no partial credit on an early stop. The full 7-point matrix would cost 2+ hours per engine per precision, 8+ hours across all four runs, alone exceeding the $10 cap. User decision (paused at ~$4.22, the $5 checkpoint): skip full tuner runs; vLLM and SGLang are reported at their shipped default config only. dispatch's own block_m tile-size sweep (16/32/64/128, its own kernel, not an upstream autotune search) is unaffected and still produces a real tuned row. All 7 default-config race records completed cleanly before this decision: dispatch-naive/persistent (bf16), dispatch-naive (int8), vllm (bf16, int8), sglang (bf16, int8) -- zero refused results. Sample: at 128 tokens uniform bf16, vLLM's default (1.86ms) already beats dispatch's naive kernel default (2.18ms), a real result.
+
+- **Task 13 (engine reference), vLLM done, 2026-09-19**: dispatch concurrency-1 rows (stock 11.87 tok/s, naive 21.04 tok/s -- consistent with Phase 1's 12.55/20.98 tok/s at a different prompt count). vLLM served the real model over 4 concurrencies cleanly: out_tok/s 115.5 (c1) -> 225.7 (c4) -> 444.9 (c16) -> 1269.2 (c64); p50 TTFT 37.9ms -> 174.1ms; $/Mtok 1.97 -> 0.18 at the measured $0.82/hr. One real fix shipped mid-run: vLLM 0.29.0's --save-detailed output carries no per-request end-to-end latencies key at all -- only per-request ttft and the inter-token gaps that follow it -- so summarize_bench_result now derives it as ttft+sum(gaps) (3acf14c). Also needed vllm[bench]'s pandas dependency, installed on the pod (not yet in any pyproject group, since the engines venv is pod-local and never installed via this repo's own dependency groups).
+
+- **Task 13 (engine reference), SGLang done; Task 14 (evidence + teardown) done, 2026-09-19/20**: SGLang served the real model cleanly across all 4 concurrencies: out_tok/s 108.6 (c1) -> 207.5 (c4) -> 405.5 (c16) -> 1180.4 (c64); p50 TTFT 54.9ms -> 135.8ms; \$/Mtok 2.10 -> 0.19. One fix needed: the serving driver's subprocess PATH had vllm-venv before sglang-venv, so the bare `python` used to launch `sglang.launch_server` resolved to the wrong interpreter (no sglang installed) -- a pod-local invocation-order fix, not a code change. All 31 non-safetensors evidence files pulled via rsync over direct SSH (not the PTY-only proxy runbook 5b needed -- this pod exposed both) and diffed byte-for-byte identical against the pod's own file list before the pod was terminated. **Total measured cost: \$4.5448 of the \$10 cap** (RunPod's own billing API, not rate x duration), pod `97jlyai5sowyeq` terminated and confirmed gone (404 on lookup).
+- [x] Task 15, 2026-09-20: findings doc, runbook, this update.
+- **Task 15 step 5 (whole-branch review), 2026-09-20**: a full-branch review
+  of this session's own new code (not the paid GPU results, which stand as
+  measured) found 20 real issues, all fixed, each its own commit: a
+  `dispatch-persistent`+int8 combination that crashed the whole race process
+  uncaught instead of recording a refusal (08950f1); `merge`'s default
+  output filename collided with its own default input glob, so a second
+  merge in a results directory would try to re-ingest its own prior summary
+  (1c39ccf), and a duplicate measurement for the same cell was silently
+  dropped instead of refused (77f10ae); non-deterministic (hash-seed
+  dependent) race-table ordering for token counts outside the registered
+  set, and `DEFAULT_BLOCK_M` duplicated across three modules with nothing
+  tying them together (3853e98); a required `--tuning-label` silently
+  ignored for `dispatch-*` engines (96727cb); SGLang's setup always
+  published `dtype="bfloat16"` regardless of the race's actual dtype
+  (70298c1); `serving_bench.summarize_bench_result` raised a raw
+  `KeyError`/`StatisticsError` instead of its own intended `ValueError`
+  refusal on a malformed or schema-drifted result, and divided by zero on a
+  zero-throughput result (c9f73ab); a zero-position `GapSplitAgreement`
+  raised an unhandled `ZeroDivisionError` instead of a clear refusal
+  (345f7c6); the engine-reference driver lost all evidence and leaked a
+  file handle if the server process failed to launch at all, and never
+  confirmed a killed server actually exited (d1af4bd); its trace file was a
+  fixed size that only covered the hardcoded default `--concurrencies`
+  (919ac30); `--prompt-set gate` silently enforced nothing when
+  `--compare-reference` was omitted, despite promising to (557ba01); plus
+  two duplicated-logic cleanups, one shared `installed_version()` instead of
+  two identical copies (08a81fe) and one shared int8-backend-capability
+  table instead of an inline if/elif (076c4cd). `make check` green
+  throughout (262 tests, up from 246; lint and `mypy --strict` clean). Three
+  commits from Task 10 (`3acf14c`, `c31d1f4`, `2536764`) were flagged as
+  having changed non-docs files without `docs/STATUS.md` staged in the same
+  commit -- this repo's own rule, and its own hook's exact purpose; left as
+  a documented gap rather than rewritten, since none of the three are
+  pushed anywhere else yet but rewriting local history to fix a paperwork
+  gap risked more than the gap itself.
+
+**Phase 6 is complete, 2026-09-20.** `make check` green throughout (262
+tests, lint and `mypy --strict` clean). **On this GPU (L40) and these
+shapes, vLLM beats dispatch's kernels at every one of the 28 measured
+(precision, token count, distribution) combinations, bf16 and int8 alike**
+-- a real, disclosed negative result: the gap runs 2.4-4.1x slower at 1
+token, narrowing to ~1.1-1.3x slower at 128 tokens and up, never closing.
+dispatch does beat SGLang specifically at 128 and 512 tokens, both
+precisions -- a real result against one contestant, not the other. (An
+earlier version of this line claimed dispatch "wins" at int8 128/512
+tokens; that compared dispatch only against SGLang and dropped vLLM from
+the comparison -- corrected here, see the findings doc for the raw-data
+check.) The at-scale correctness gate
+(owed since Phase 5a) passed for every kernel at 1,036 positions,
+97.1-97.3% top-1 agreement, zero large-gap disagreements against the
+pre-registered 1.0 threshold -- replacing Phase 5a's 29-position claim.
+vLLM and SGLang both served the real model correctly across concurrency
+1/4/16/64 (vLLM ahead of SGLang at every point, ~6-9% on throughput);
+dispatch has no serving stack to place in that same ranked table, so its
+own concurrency-1 numbers (naive kernel: 21.04 tok/s, a ~1.8x speedup over
+stock's 11.87, consistent with Phase 1) are reported alongside it, labeled
+non-comparable. vLLM's and SGLang's own tuners were not run to completion
+(a live check found ~18 minutes per token count, all-or-nothing per
+run -- confirmed by starting one, watching it, and killing it before
+wasting more) -- both engines are shown at default configuration only, a
+disclosed limitation, not a fudge. Total cost: **\$4.5448 of the \$10 cap**
+(RunPod's billing API). Full account:
+`docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`; runbook:
+`docs/runbooks/phase-6-final-benchmark.md`.
 
 ## Next step
 
-Phase 5b is done: root cause fixed, real numbers measured, both
-correctness gates and the full k-sweep checked and explained. Phase 4 is
-merged (PR #4), as are Phase 5a (PR #5) and Phase 5b (PR #6), each on its
-own branch per the one-branch-per-phase convention. Phase 3's PR (#3) also
-merged.
-Phase 2's PR is still open and awaiting maintainer review; no further
-work planned on it beyond responding to review feedback. Phase 6 (final
-benchmark vs. vLLM/SGLang) planning can proceed, and should treat the
-Phase 5a audit question above as an open input, not a blocker.
+Phases 3 (PR #3), 4 (PR #4), 5a (PR #5) and 5b (PR #6) are all merged, each
+on its own branch per the one-branch-per-phase convention.
+
+**Phase 6 is done, 2026-09-20** (design, plan, all 15 tasks, findings,
+runbook -- see "Phase 6 progress"). To be merged via a PR once the user
+approves pushing (branch `phase-6-final-benchmark`, not yet pushed as of
+this writing). The system design's phase table (§7) is now fully executed,
+Phase 0 through 6; Phase 7 (productionization: Rust router, Docker, K8s
+demoed once) is the only phase left unstarted.
+
+Phase 2's PR is still open and awaiting maintainer review; no further work
+planned on it beyond responding to review feedback.

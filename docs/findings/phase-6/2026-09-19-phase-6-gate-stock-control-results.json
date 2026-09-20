@@ -1,0 +1,122 @@
+{
+  "model": "deepseek-ai/deepseek-moe-16b-base",
+  "device": "cuda",
+  "dtype": "bfloat16",
+  "moe_kernel": "none",
+  "moe_layers_patched": 0,
+  "prompt_set": "gate",
+  "max_new_tokens": 1,
+  "ignore_eos": false,
+  "gap_split": {
+    "positions": 1036,
+    "disagreements": 0,
+    "near_tie_disagreements": 0,
+    "large_gap_disagreements": 0,
+    "max_disagreement_gap": 0.0,
+    "top1_agreement": 1.0
+  },
+  "run_count": 16,
+  "mean_ttft": 0.47409469724516384,
+  "p50_ttft": 0.4381235365290195,
+  "p99_ttft": 0.9559258260065687,
+  "mean_inter_token_latency": 0.0,
+  "mean_tokens_per_second": 2.215566081683725,
+  "reference_comparison": {
+    "prompt_000_logits": {
+      "positions": 68,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_001_logits": {
+      "positions": 65,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_002_logits": {
+      "positions": 67,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_003_logits": {
+      "positions": 59,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_004_logits": {
+      "positions": 72,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_005_logits": {
+      "positions": 64,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_006_logits": {
+      "positions": 54,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_007_logits": {
+      "positions": 64,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_008_logits": {
+      "positions": 65,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_009_logits": {
+      "positions": 67,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_010_logits": {
+      "positions": 61,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_011_logits": {
+      "positions": 82,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_012_logits": {
+      "positions": 50,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_013_logits": {
+      "positions": 63,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_014_logits": {
+      "positions": 57,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    },
+    "prompt_015_logits": {
+      "positions": 78,
+      "top1_agreement": 1.0,
+      "mutual_top_k": true,
+      "max_abs_diff": 0.0
+    }
+  }
+}

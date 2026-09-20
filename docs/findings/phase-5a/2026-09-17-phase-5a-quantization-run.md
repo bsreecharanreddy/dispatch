@@ -276,3 +276,14 @@ abandoned attempts) included. Full records:
 `docs/findings/phase-5a/2026-09-17-phase-5a-community-attempt1-cost.md`,
 `2026-09-17-phase-5a-community-attempt2-cost.md`,
 `2026-09-17-phase-5a-quantization-cost.md`.
+
+## Addendum, 2026-09-18 (Phase 5b)
+
+The "perfect top-1/mutual-top-k agreement" above covers 29 positions in a
+single run. Phase 5b later measured near-tie floating-point sensitivity
+(0.1-0.4 top-2 logit gaps flipping an argmax across process launches) in
+this same `grouped_matmul_int8` kernel, which a sample this small cannot
+rule out. Read the agreement result as "true on a small sample", not
+"shown wrong". It is not a RoPE-bug artifact: this phase's GPU session
+ran on `transformers==4.57.6` and its logit diffs are finite and non-zero. See
+`docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.

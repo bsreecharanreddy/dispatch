@@ -82,6 +82,31 @@ def test_generate_with_timings_runs_max_new_tokens_steps_without_eos() -> None:
     assert timing.token_times == (0.1, 0.2, 0.3)
 
 
+class _EosAtSecondTokenTokenizer(_FakeTokenizer):
+    eos_token_id = 2  # _FakeModel emits token (call_count % vocab): 1, 2, 3, ...
+
+
+def _run_with_eos_tokenizer(*, ignore_eos: bool) -> int:
+    counter = iter(range(100))
+    timing = generate_with_timings(
+        _FakeModel(),  # type: ignore[arg-type]
+        _EosAtSecondTokenTokenizer(),  # type: ignore[arg-type]
+        "prompt",
+        max_new_tokens=5,
+        clock_fn=lambda: float(next(counter)),
+        ignore_eos=ignore_eos,
+    )
+    return timing.generated_token_count
+
+
+def test_generate_with_timings_stops_at_eos_by_default() -> None:
+    assert _run_with_eos_tokenizer(ignore_eos=False) == 2
+
+
+def test_generate_with_timings_ignore_eos_generates_exactly_max_new_tokens() -> None:
+    assert _run_with_eos_tokenizer(ignore_eos=True) == 5
+
+
 def test_load_model_omits_attn_implementation_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

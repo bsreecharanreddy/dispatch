@@ -61,14 +61,14 @@ def summarize(runs: list[TokenTimings]) -> BenchmarkSummary:
     return BenchmarkSummary(
         run_count=len(runs),
         mean_ttft=statistics.mean(ttfts),
-        p50_ttft=_percentile(ttfts, 0.50),
-        p99_ttft=_percentile(ttfts, 0.99),
+        p50_ttft=percentile(ttfts, 0.50),
+        p99_ttft=percentile(ttfts, 0.99),
         mean_inter_token_latency=statistics.mean(all_itls) if all_itls else 0.0,
         mean_tokens_per_second=statistics.mean(run.tokens_per_second for run in runs),
     )
 
 
-def _percentile(sorted_values: list[float], fraction: float) -> float:
+def percentile(sorted_values: list[float], fraction: float) -> float:
     if len(sorted_values) == 1:
         return sorted_values[0]
     index = fraction * (len(sorted_values) - 1)

@@ -15,6 +15,12 @@ from pathlib import Path
 
 import torch
 
+from dispatch.benchmark.agreement import (
+    MIN_GATE_POSITIONS,
+    aggregate_gap_split,
+    compare_gap_split,
+)
+from dispatch.benchmark.gate_prompts import GATE_PROMPTS
 from dispatch.benchmark.harness import generate_with_timings, load_model
 from dispatch.benchmark.metrics import TokenTimings, summarize
 from dispatch.benchmark.reference import (
@@ -48,6 +54,7 @@ def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-faci
     repetitions: int,
     max_new_tokens: int,
     moe_kernel: str = "none",
+    ignore_eos: bool = False,
 ) -> tuple[list[TokenTimings], dict[str, torch.Tensor], int]:
     """Returns the timed runs, the logits, and how many MoE layers were patched."""
     model, tokenizer = load_model(
@@ -66,7 +73,12 @@ def run_baseline(  # noqa: PLR0913 -- each of these is an independent, user-faci
 
     runs = [
         generate_with_timings(
-            model, tokenizer, prompt, max_new_tokens=max_new_tokens, device=device
+            model,
+            tokenizer,
+            prompt,
+            max_new_tokens=max_new_tokens,
+            device=device,
+            ignore_eos=ignore_eos,
         )
         for prompt in prompts
         for _ in range(repetitions)
@@ -83,10 +95,24 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--max-new-tokens", type=int, default=64)
+    parser.add_argument(
+        "--ignore-eos",
+        action="store_true",
+        help="generate exactly --max-new-tokens even past an EOS (matches vllm bench serve)",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("docs/findings/phase-0"))
     parser.add_argument("--run-label", default=time.strftime("%Y-%m-%d-baseline"))
     parser.add_argument(
         "--moe-kernel", default="none", choices=["none", *BACKENDS, QUANTIZED_BACKEND]
+    )
+    parser.add_argument(
+        "--prompt-set",
+        choices=["default", "gate"],
+        default="default",
+        help=(
+            "'gate' runs Phase 6's larger fixed prompt set and enforces its gap-split "
+            "rule; requires --compare-reference"
+        ),
     )
     parser.add_argument(
         "--compare-reference",
@@ -95,6 +121,15 @@ def main(argv: list[str] | None = None) -> None:
         help="logits file from a stock run of the same model and prompts",
     )
     args = parser.parse_args(argv)
+    if args.prompt_set == "gate" and args.compare_reference is None:
+        # The enforcement below only ever fires when gap_split is not None,
+        # which requires --compare-reference. Without it, --prompt-set gate
+        # silently ran the larger prompt set and enforced nothing -- refuse
+        # before spending any GPU time on a run that can't do what it says.
+        raise SystemExit(
+            "--prompt-set gate enforces the gap-split rule against a reference, so it "
+            "requires --compare-reference; pass one or use --prompt-set default"
+        )
 
     dtype: torch.dtype = getattr(torch, args.dtype)
     runs, logits, moe_layers_patched = run_baseline(
@@ -102,10 +137,11 @@ def main(argv: list[str] | None = None) -> None:
         device=args.device,
         dtype=dtype,
         trust_remote_code=args.trust_remote_code,
-        prompts=DEFAULT_PROMPTS,
+        prompts=list(GATE_PROMPTS) if args.prompt_set == "gate" else DEFAULT_PROMPTS,
         repetitions=args.repetitions,
         max_new_tokens=args.max_new_tokens,
         moe_kernel=args.moe_kernel,
+        ignore_eos=args.ignore_eos,
     )
     summary = summarize(runs)
 
@@ -118,10 +154,12 @@ def main(argv: list[str] | None = None) -> None:
     save_reference(logits, reference_path)
     print(f"wrote {reference_path}")
 
-    comparison = (
-        compare_top_k_agreement(logits, load_reference(args.compare_reference))
-        if args.compare_reference is not None
-        else {}
+    reference = load_reference(args.compare_reference) if args.compare_reference else None
+    comparison = compare_top_k_agreement(logits, reference) if reference is not None else {}
+    gap_split = (
+        aggregate_gap_split(compare_gap_split(logits, reference).values())
+        if reference is not None
+        else None
     )
 
     results_path = args.output_dir / f"{args.run_label}-results.json"
@@ -133,6 +171,10 @@ def main(argv: list[str] | None = None) -> None:
                 "dtype": args.dtype,
                 "moe_kernel": args.moe_kernel,
                 "moe_layers_patched": moe_layers_patched,
+                "prompt_set": args.prompt_set,
+                "max_new_tokens": args.max_new_tokens,
+                "ignore_eos": args.ignore_eos,
+                "gap_split": None if gap_split is None else gap_split.to_dict(),
                 **asdict(summary),
                 "reference_comparison": {key: asdict(value) for key, value in comparison.items()},
             },
@@ -145,6 +187,18 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(
             f"{args.moe_kernel} logits disagree with {args.compare_reference} -- see {results_path}"
         )
+    if args.prompt_set == "gate" and gap_split is not None:
+        if gap_split.positions < MIN_GATE_POSITIONS:
+            raise SystemExit(
+                f"gate compared only {gap_split.positions} positions, fewer than the "
+                f"{MIN_GATE_POSITIONS} an at-scale claim needs -- see {results_path}"
+            )
+        if gap_split.large_gap_disagreements > 0:
+            raise SystemExit(
+                f"{args.moe_kernel} flips {gap_split.large_gap_disagreements} position(s) the "
+                f"reference was confident about (widest gap {gap_split.max_disagreement_gap:.3f}) "
+                f"-- a bug, not a near-tie; see {results_path}"
+            )
 
 
 if __name__ == "__main__":

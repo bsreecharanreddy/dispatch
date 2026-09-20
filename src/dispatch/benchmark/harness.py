@@ -58,6 +58,7 @@ def generate_with_timings(  # noqa: PLR0913 -- device/clock_fn are what make thi
     max_new_tokens: int = 32,
     device: str = "cpu",
     clock_fn: Callable[[], float] = time.perf_counter,
+    ignore_eos: bool = False,
 ) -> TokenTimings:
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
     input_ids = inputs["input_ids"]
@@ -76,7 +77,7 @@ def generate_with_timings(  # noqa: PLR0913 -- device/clock_fn are what make thi
             past_key_values = outputs.past_key_values
             next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
             next_input = next_token
-            if eos_token_id is not None and next_token.item() == eos_token_id:
+            if not ignore_eos and eos_token_id is not None and next_token.item() == eos_token_id:
                 break
 
     return TokenTimings(
