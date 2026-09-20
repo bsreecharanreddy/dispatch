@@ -30,7 +30,6 @@ from dispatch.benchmark.serving_bench import (
     ENGINES,
     NUM_WARMUPS,
     OUTPUT_LEN,
-    TRACE_LINES,
     ServingSummary,
     build_bench_command,
     build_serve_command,
@@ -62,7 +61,10 @@ def run_engine_reference(  # noqa: PLR0913 -- injectable process/network hooks m
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     trace_path = output_dir / f"{run_label}-trace.jsonl"
-    write_trace(trace_path, GATE_PROMPTS, TRACE_LINES)
+    # The default TRACE_LINES only covers the hardcoded default CONCURRENCIES
+    # tuple; a caller passing a different (e.g. larger) --concurrencies needs
+    # at least as many trace lines as its own largest requested concurrency.
+    write_trace(trace_path, GATE_PROMPTS, max(num_prompts_for(c) for c in concurrencies))
     summaries: list[ServingSummary] = []
     error: str | None = None
     server: Any = None

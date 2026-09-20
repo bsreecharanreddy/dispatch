@@ -8,6 +8,8 @@ from typing import Any
 import pytest
 from scripts.gpu.phase6_engine_reference import run_engine_reference
 
+from dispatch.benchmark.serving_bench import num_prompts_for
+
 
 class _FakeServer:
     def __init__(self) -> None:
@@ -89,6 +91,20 @@ def test_a_clean_run_writes_one_summary_per_concurrency_and_stops_the_server(
     assert record["config"]["gpu_cost_per_hour"] == 0.72
     assert server.terminated
     assert (tmp_path / "ref-trace.jsonl").exists()
+
+
+def test_the_trace_file_scales_with_a_concurrency_above_the_hardcoded_default(
+    tmp_path: Path,
+) -> None:
+    """TRACE_LINES's old fixed 512 only covered the default CONCURRENCIES
+    tuple (max 64); a caller passing a larger concurrency needs a trace with
+    at least as many lines as vllm bench serve will request."""
+    server = _FakeServer()
+
+    _run(tmp_path, server, {128: _good_raw()})
+
+    lines = (tmp_path / "ref-trace.jsonl").read_text().splitlines()
+    assert len(lines) == num_prompts_for(128)
 
 
 def test_a_bad_run_still_writes_the_earlier_evidence_and_stops_the_server(
