@@ -86,6 +86,30 @@ def test_a_run_that_cannot_be_trusted_is_refused(overrides: dict[str, Any], matc
         _summarize(_raw(**overrides))
 
 
+def test_a_missing_errors_key_is_refused_not_an_unhandled_keyerror() -> None:
+    """A schema variant that drops 'errors' entirely (not just an empty
+    list) must not crash with a raw KeyError."""
+    raw = _raw()
+    del raw["errors"]
+
+    with pytest.raises(ValueError, match="'errors' is missing"):
+        _summarize(raw)
+
+
+@pytest.mark.parametrize("key", ["output_lens", "ttfts", "itls"])
+def test_a_per_request_array_shorter_than_completed_is_refused_not_a_crash(key: str) -> None:
+    """completed=4 but a per-request array with fewer than 4 entries must be
+    refused up front, not silently fed into statistics.mean/percentile until
+    one of them raises StatisticsError or IndexError."""
+    with pytest.raises(ValueError, match=f"{key!r} is 1 entries"):
+        _summarize(_raw(**{key: _raw()[key][:1]}))
+
+
+def test_zero_output_throughput_is_refused_not_an_unhandled_zerodivisionerror() -> None:
+    with pytest.raises(ValueError, match=r"output_throughput=0\.0"):
+        _summarize(_raw(output_throughput=0.0))
+
+
 def test_bench_command_carries_the_verified_flags_and_per_concurrency_prompt_count() -> None:
     command = build_bench_command(
         "m",

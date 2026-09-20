@@ -121,12 +121,22 @@ def summarize_bench_result(
     gpu_cost_per_hour: float,
 ) -> ServingSummary:
     """Refuses -- raises ValueError -- rather than report a number from a run
-    that failed requests, returned no completions, or did not generate exactly
+    that failed requests, returned no completions, did not generate exactly
     `expected_output_len` tokens per request (an engine that ignored
-    --ignore-eos would report a throughput no other engine's is comparable to)."""
+    --ignore-eos would report a throughput no other engine's is comparable
+    to), or whose per-request arrays don't actually match its own reported
+    `completed` count (a malformed or schema-drifted result JSON)."""
     completed = int(raw["completed"])
     if completed == 0:
         raise ValueError("bench completed zero requests -- refusing to report numbers")
+    for key in ("errors", "output_lens", "ttfts", "itls"):
+        values = raw.get(key)
+        if values is None or len(values) != completed:
+            got = "missing" if values is None else f"{len(values)} entries"
+            raise ValueError(
+                f"bench reported completed={completed} but {key!r} is {got} -- "
+                "refusing to report numbers"
+            )
     failed = int(raw.get("failed", 0))
     errors = [error for error in raw["errors"] if error]
     if failed or errors:
@@ -146,6 +156,10 @@ def summarize_bench_result(
     e2e_ms = sorted(latency * MS for latency in latencies_s)
     tokens_per_s = [n / latency for n, latency in zip(raw["output_lens"], latencies_s, strict=True)]
     output_tokens_per_s = float(raw["output_throughput"])
+    if output_tokens_per_s <= 0:
+        raise ValueError(
+            f"bench reported output_throughput={output_tokens_per_s} -- refusing to report numbers"
+        )
     return ServingSummary(
         concurrency=concurrency,
         completed=completed,
