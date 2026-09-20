@@ -707,6 +707,14 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       `..._ttft_seconds`, `..._inter_token_latency_seconds`,
       `..._queue_depth` on its own `Registry`, with `.encode()` for the
       `/metrics` HTTP handler Task 7 adds. `cargo test`/`fmt`/`clippy` clean.
+- [x] Task 6, 2026-09-20: router gRPC client (`router/src/client.rs`) and a
+      test-only mock `ModelServer` (`router/src/test_support.rs`, gated
+      `#[cfg(test)]`). `ModelServerClient::generate` records TTFT and
+      inter-token-latency into `RouterMetrics` as it streams. The one thing
+      Task 2 flagged as uncertain -- whether `#[tonic::async_trait]` still
+      matches tonic 0.14's generated `ModelServer` trait after the
+      tonic-prost-build split -- compiled and passed on the first try, no
+      further correction needed. `cargo test`/`fmt`/`clippy` clean.
 
 ## Next step
 
