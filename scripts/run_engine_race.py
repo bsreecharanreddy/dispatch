@@ -15,7 +15,6 @@ JSON, so the evidence survives.
 from __future__ import annotations
 
 import argparse
-import importlib.metadata
 import json
 import os
 import time
@@ -37,6 +36,7 @@ from dispatch.benchmark.engines.base import (
     MoEEngine,
     RaceCase,
     dequantized_weights,
+    installed_version,
     make_case,
     make_weights,
     reference_output,
@@ -197,7 +197,7 @@ def describe_environment(device: str) -> dict[str, Any]:
         "gpu": torch.cuda.get_device_name() if device.startswith("cuda") else "cpu",
     }
     for package in ("triton", "vllm", "sglang"):
-        environment[package] = _installed_version(package)
+        environment[package] = installed_version(package)
     for variable in ("VLLM_TUNED_CONFIG_FOLDER", "SGLANG_MOE_CONFIG_DIR"):
         folder = os.environ.get(variable)
         environment[variable] = folder
@@ -376,13 +376,6 @@ def _load_race_record(path: Path) -> dict[str, Any]:
             "'results' keys) -- does --glob also match a previous merge's own output?"
         )
     return record
-
-
-def _installed_version(package: str) -> str | None:
-    try:
-        return importlib.metadata.version(package)
-    except importlib.metadata.PackageNotFoundError:
-        return None
 
 
 if __name__ == "__main__":

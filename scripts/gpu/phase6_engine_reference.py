@@ -12,7 +12,6 @@ partial run survives; the failure is then re-raised (non-zero exit).
 from __future__ import annotations
 
 import argparse
-import importlib.metadata
 import json
 import subprocess
 import time
@@ -23,6 +22,7 @@ from typing import Any
 
 import requests
 
+from dispatch.benchmark.engines.base import installed_version
 from dispatch.benchmark.gate_prompts import GATE_PROMPTS
 from dispatch.benchmark.serving_bench import (
     CONCURRENCIES,
@@ -115,7 +115,7 @@ def run_engine_reference(  # noqa: PLR0913 -- injectable process/network hooks m
                 {
                     "config": {
                         "engine": engine,
-                        "engine_version": _version(engine),
+                        "engine_version": installed_version(engine),
                         "model": model,
                         "dtype": "bfloat16",
                         "output_len": OUTPUT_LEN,
@@ -155,13 +155,6 @@ def main(argv: list[str] | None = None) -> None:
         gpu_cost_per_hour=args.gpu_cost_per_hour,
     )
     print(f"wrote {path}")
-
-
-def _version(package: str) -> str | None:
-    try:
-        return importlib.metadata.version(package)
-    except importlib.metadata.PackageNotFoundError:
-        return None
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ never a cast the engine's real serving path wouldn't pay.
 
 from __future__ import annotations
 
+import importlib.metadata
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -136,6 +137,16 @@ def reference_output(case: RaceCase, weights: StackedExpertWeights) -> torch.Ten
     return grouped_moe_routed(
         case.x.float(), case.topk_idx, case.topk_weight.float(), weights_fp32, torch_grouped_matmul
     )
+
+
+def installed_version(package: str) -> str | None:
+    """The installed version of a package that may not be installed at all
+    (e.g. this dev box has neither vllm nor sglang) -- `None`, not a raised
+    `PackageNotFoundError`, so a config block can record it directly."""
+    try:
+        return importlib.metadata.version(package)
+    except importlib.metadata.PackageNotFoundError:
+        return None
 
 
 def fuse_gate_up(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
