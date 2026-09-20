@@ -812,6 +812,11 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       with the wider probes. `ExternalName`'s pure-DNS semantics (no
       port remapping) mean this same manifest set, unmodified, is what
       Task 13 points at the real SSH tunnel instead of the local stub.
+- [x] Task 12, 2026-09-20: `make check`/`make check-fast` are Rust-aware
+      (`router-lint`: `cargo fmt --check` + `cargo clippy -D warnings`;
+      `router-test`: `cargo test`) -- "green before push" is one command
+      covering both languages again. Ran `make check` for real: all 5
+      steps pass (268 Python tests, 9 Rust tests).
 
 ## Next step
 

@@ -1,4 +1,4 @@
-.PHONY: test test-fast lint fmt typecheck check check-fast coverage
+.PHONY: test test-fast lint fmt typecheck check check-fast coverage router-lint router-test
 
 # GPU-dependent tests (anything that needs an actual CUDA device) are marked
 # `gpu` and excluded here -- this repo's CI has no GPU runner. They run
@@ -24,22 +24,36 @@ fmt:
 typecheck:
 	uv run mypy src tests scripts
 
-# The full gate. Runs before every push -- CI runs the same three steps.
+router-lint:
+	cd router && cargo fmt --check && cargo clippy --all-targets -- -D warnings
+
+router-test:
+	cd router && cargo test
+
+# The full gate. Runs before every push -- CI runs the same steps.
 check:
-	@echo "[1/3] lint"
+	@echo "[1/5] lint"
 	@$(MAKE) lint
-	@echo "[2/3] typecheck"
+	@echo "[2/5] typecheck"
 	@$(MAKE) typecheck
-	@echo "[3/3] test"
+	@echo "[3/5] test"
 	@$(MAKE) test
+	@echo "[4/5] router-lint"
+	@$(MAKE) router-lint
+	@echo "[5/5] router-test"
+	@$(MAKE) router-test
 
 check-fast:
-	@echo "[1/3] lint"
+	@echo "[1/5] lint"
 	@$(MAKE) lint
-	@echo "[2/3] typecheck"
+	@echo "[2/5] typecheck"
 	@$(MAKE) typecheck
-	@echo "[3/3] test-fast"
+	@echo "[3/5] test-fast"
 	@$(MAKE) test-fast
+	@echo "[4/5] router-lint"
+	@$(MAKE) router-lint
+	@echo "[5/5] router-test"
+	@$(MAKE) router-test
 
 coverage:
 	uv run pytest -m "not gpu" --cov --cov-report=term --cov-report=xml
