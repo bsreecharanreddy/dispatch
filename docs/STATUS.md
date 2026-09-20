@@ -723,6 +723,25 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       binary, both running): `POST /generate` returned real streamed text
       and timing, `/metrics` showed real recorded TTFT/inter-token-latency/
       queue-depth/requests-total values. `cargo test`/`fmt`/`clippy` clean.
+- [x] Task 8, 2026-09-20: cross-language router integration test
+      (`router/tests/cross_language_integration.rs`) -- spawns the real
+      `scripts/run_model_server.py --responder stub` as a subprocess and
+      drives it through the real router over real gRPC. Found and fixed a
+      real process-lifecycle bug while getting it stable: the spawned
+      `uv run python ...` forks rather than exec'ing on this machine, so
+      killing only the immediate child (the `uv` process) left the actual
+      model server running, orphaned and reparented to `launchd`, still
+      listening on the test's port after the test had already passed --
+      confirmed live (`ps` showed `PPID=1`) after a manually
+      `tail`-piped run hung for 27+ minutes because the orphan also held
+      an inherited stderr fd the pipe was waiting on for EOF. Fixed by
+      putting the child in its own process group
+      (`std::os::unix::process::CommandExt::process_group(0)`) and killing
+      the negative-pid group in `Drop`, plus switching `stderr` from
+      `Stdio::inherit()` to `Stdio::piped()` so the fd-inheritance hole
+      can't recur even if the group-kill ever fails. Verified clean over 3
+      repeated runs (no orphaned process after any of them). All 9 router
+      tests (8 lib + this one) pass; `cargo fmt`/`clippy -D warnings` clean.
 
 ## Next step
 
