@@ -78,6 +78,20 @@ research ADR-0003 cites). This design is the *what exactly gets built*.
   locally, a browser-automation pass (Playwright/Chrome DevTools)
   navigates to the dashboard and saves the screenshot into
   `docs/findings/phase-7/` directly, rather than a manual step.
+- **No standing public deployment -- considered and explicitly declined.**
+  A real GPU-backed public endpoint would cost real money continuously
+  (an L40/A40-class GPU left running prices out around $500-600/month)
+  and directly contradicts this project's own cost-discipline rules
+  (CLAUDE.md: "never leave a rented GPU idle," "budget cap set before the
+  first rental") that every prior phase followed. In place of a live URL,
+  the recruiter-facing artifact is a **short screen recording** of the
+  live `kind` demo (terminal bring-up, then Grafana panels populating
+  with real request traffic) captured alongside the screenshot and
+  embedded in the README -- free to produce, no standing infrastructure,
+  and no honesty-labeling burden (an always-on public endpoint that
+  wasn't actually backed by the real model at click-time would need
+  careful labeling to not misrepresent what's live, which this project's
+  "never quote a number that wasn't measured" ethos leans hard against).
 
 ## 3. Components
 
@@ -124,7 +138,7 @@ scripts/run_kind_demo.sh            scripted bring-up: kind create, apply
 
 docs/findings/phase-7/              demo evidence: metrics JSON/exported
                                      Grafana panel data, the screenshot,
-                                     cost record
+                                     the screen recording, cost record
 ```
 
 ## 4. Data flow
@@ -165,9 +179,12 @@ gates to remember.
 - **Autoscaling, multi-replica routing, or a real load balancer.** One
   router replica, one model server, demoed once. Production-shaped
   plumbing, not a production-scale deployment.
-- **A public-facing deployment.** The SSH-tunnel topology is deliberately
-  local-demo-only; no cloud ingress, no TLS termination, no auth layer
-  beyond what the tunnel itself provides.
+- **A public-facing deployment.** Considered explicitly during
+  brainstorming and declined -- see §2's "no standing public deployment"
+  entry for the cost and honesty-labeling reasoning. The SSH-tunnel
+  topology is deliberately local-demo-only; no cloud ingress, no TLS
+  termination, no auth layer beyond what the tunnel itself provides. The
+  recorded demo (§2, §7) is the recruiter-facing artifact instead.
 - **Rewriting the model server's inference path in Rust.** ADR-0003
   already ruled this out; Rust stays scoped to the router.
 - **A continuously running K8s deployment.** `kind` is created, demoed,
@@ -212,7 +229,9 @@ than every prior phase because this is a demo session, not a sweep.
 
 **Rollout.** Branch `phase-7-productionization`, one commit per plan task,
 `docs/STATUS.md` updated in the same commit as each piece of work, one PR
-at the end. Findings and the Grafana screenshot in `docs/findings/phase-7/`.
-README, CLAUDE.md and the story-bank gist refreshed at completion -- and
+at the end. Findings, the Grafana screenshot, and the demo screen recording
+in `docs/findings/phase-7/`. README, CLAUDE.md and the story-bank gist
+refreshed at completion -- the README refresh specifically embeds the demo
+recording, since it's this phase's main recruiter-facing artifact -- and
 since this closes the system design's phase table (§7) entirely, that
 completion note goes in CLAUDE.md's "Current status" too.
