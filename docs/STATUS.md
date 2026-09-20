@@ -622,10 +622,16 @@ machine) -- that is Task 10's first job on the pod.
 
 **Phase 6 is complete, 2026-09-20.** `make check` green throughout (262
 tests, lint and `mypy --strict` clean). **On this GPU (L40) and these
-shapes, vLLM's and SGLang's own fused-MoE beat dispatch's kernels at their
-shipped default config at nearly every routed-expert shape tested, in both
-bf16 and int8** -- a real, disclosed negative result: dispatch's naive
-kernel wins only at int8, 128 and 512 tokens. The at-scale correctness gate
+shapes, vLLM beats dispatch's kernels at every one of the 28 measured
+(precision, token count, distribution) combinations, bf16 and int8 alike**
+-- a real, disclosed negative result: the gap runs 2.4-4.1x slower at 1
+token, narrowing to ~1.1-1.3x slower at 128 tokens and up, never closing.
+dispatch does beat SGLang specifically at 128 and 512 tokens, both
+precisions -- a real result against one contestant, not the other. (An
+earlier version of this line claimed dispatch "wins" at int8 128/512
+tokens; that compared dispatch only against SGLang and dropped vLLM from
+the comparison -- corrected here, see the findings doc for the raw-data
+check.) The at-scale correctness gate
 (owed since Phase 5a) passed for every kernel at 1,036 positions,
 97.1-97.3% top-1 agreement, zero large-gap disagreements against the
 pre-registered 1.0 threshold -- replacing Phase 5a's 29-position claim.

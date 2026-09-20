@@ -179,11 +179,14 @@ agree with the stock reference at 1,036 positions (97.1-97.3% top-1
 agreement), zero large-gap disagreements against a pre-registered
 1.0-logit threshold -- Phase 5a's 29-position claim is superseded by this
 number for these configs. **The kernel race is a real, disclosed loss for
-dispatch**: vLLM 0.29.0's and SGLang 0.5.20's own fused-MoE beat dispatch's
-kernels at their shipped default config at nearly every tested shape (bf16
-and int8), on the identical GPU, model, and `torch`/`triton` build as every
-contestant -- dispatch's naive kernel wins only at int8, 128 and 512
-tokens. vLLM and SGLang each served the real model correctly across
+dispatch**: vLLM 0.29.0 beats dispatch's kernels at every one of the 28
+measured (precision, token count, distribution) combinations, bf16 and
+int8 alike, on the identical GPU, model, and `torch`/`triton` build as
+every contestant -- the gap is largest at 1 token (2.4-4.1x slower) and
+narrows to ~1.1-1.3x slower at 128 tokens and up, never closing. dispatch
+does beat SGLang specifically at 128 and 512 tokens, both precisions -- a
+real result against one contestant, not the other. vLLM and SGLang each
+served the real model correctly across
 concurrency 1/4/16/64 (vLLM roughly 6-9% ahead of SGLang throughout);
 dispatch has no served, batched engine of its own to place in that same
 ranked table (design doc §6 amended to say so explicitly), so its

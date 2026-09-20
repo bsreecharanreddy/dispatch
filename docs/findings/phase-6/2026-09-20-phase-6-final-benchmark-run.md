@@ -11,15 +11,26 @@ difference.
 
 ## Outcome
 
-**On this GPU, at these shapes, vLLM's and SGLang's own fused-MoE beat
-dispatch's kernels at their shipped default configuration, at nearly every
-routed-expert-layer shape tested, in both bf16 and int8.** dispatch's naive
-kernel is competitive only at the smallest and largest ends of the sweep (1
-token, and 2048-token int8), and its own tile-size tuning closes some but
-not all of the gap. This is a real, disclosed negative result, not a caveat
+**vLLM beats dispatch at every one of the 28 measured (precision, token
+count, distribution) combinations, with no exception, in both bf16 and
+int8.** The gap is largest at the smallest batch (1 token: dispatch's best
+variant is 2.4-4.1x slower than vLLM) and narrows steadily as token count
+grows, to roughly 1.1-1.3x slower at 128 tokens and up -- dispatch's own
+tile-size tuning helps close that narrower gap further but never closes it
+to zero. **dispatch does beat SGLang specifically**, at 128 and 512 tokens
+in both bf16 and int8 (2048 tokens is a closer, distribution-dependent
+tossup either way) -- a real result against one contestant, just not the
+other. This is a real, disclosed negative result against the
+project's actual goal (beating a production engine's kernel), not a caveat
 buried under a positive headline: this repo has published null and negative
 results before (Phase 1's persistent-kernel tie, Phase 3's disproved
-hypothesis, Phase 4's inconclusive TTFT), and this is another one.
+hypothesis, Phase 4's inconclusive TTFT), and this is another one. An
+earlier draft of this doc claimed dispatch's naive kernel "wins" at int8
+128/512 tokens; that compared dispatch only against SGLang there and
+dropped vLLM out of the comparison -- vLLM's 1.232ms and 1.312ms at those
+two points are lower than dispatch's best (1.628ms, 1.725ms) the whole
+time. Corrected here after a raw-data check found the error; nothing about
+the underlying measurements changed, only this narrative.
 
 **The correctness gate passed for every kernel at scale**: naive, persistent
 and int8 all agree with the stock reference at every one of 1,036 tested
@@ -132,10 +143,10 @@ their own tuners were not run to completion.
 | 16 | zipf | 1.173 / 1.665 | 0.769 / 0.786 | **0.646 / 0.650** |
 | 64 | uniform | 1.668 / 2.395 | 1.184 / 1.203 | **0.975 / 0.979** |
 | 64 | zipf | 1.541 / 2.025 | 1.100 / 1.137 | **0.923 / 0.946** |
-| 128 | uniform | **1.671 / 1.840** | 2.111 / 2.145 | 1.232 / 1.298 |
-| 128 | zipf | **1.660 / 1.794** | 2.111 / 2.156 | 1.247 / 1.266 |
-| 512 | uniform | **1.749 / 2.068** | 2.320 / 2.347 | 1.312 / 1.319 |
-| 512 | zipf | **1.745 / 2.099** | 2.219 / 2.302 | 1.356 / 1.372 |
+| 128 | uniform | 1.671 / 1.840 | 2.111 / 2.145 | **1.232 / 1.298** |
+| 128 | zipf | 1.660 / 1.794 | 2.111 / 2.156 | **1.247 / 1.266** |
+| 512 | uniform | 1.749 / 2.068 | 2.320 / 2.347 | **1.312 / 1.319** |
+| 512 | zipf | 1.745 / 2.099 | 2.219 / 2.302 | **1.356 / 1.372** |
 | 2048 | uniform | 4.690 / 5.529 | 2.798 / 3.460 | **2.520 / 2.683** |
 | 2048 | zipf | 4.707 / 5.200 | 3.271 / 3.531 | **2.497 / 2.559** |
 
@@ -146,11 +157,12 @@ mean at that row):
   consistently the second-best dispatch variant, and SGLang sits between
   dispatch and vLLM except at 128-512 tokens, where it falls behind
   dispatch's own kernels.
-- **int8: dispatch's own naive kernel wins at 128 and 512 tokens**, the one
-  clear region where this project's own kernel is the fastest measured
-  contestant. vLLM wins everywhere else, including both ends of the sweep
-  (1 token and 2048 tokens) by a wide margin at the small-batch end (0.141ms
-  vs. dispatch's 0.525ms at 1 token).
+- **int8: vLLM wins every single row here too**, by the widest margin at 1
+  token (0.141ms vs. dispatch's 0.525ms) and the narrowest at 512 tokens
+  (1.312ms vs. dispatch's tuned 1.725ms). **dispatch does beat SGLang at 128
+  and 512 tokens** (e.g. 1.628ms vs. SGLang's 2.111ms at 128, tuned), the
+  same region where SGLang falls behind dispatch in bf16 too -- a real
+  result against SGLang specifically, not against vLLM.
 - Full tables (both default and dispatch's own tuned column) are in
   `2026-09-19-phase-6-race-summary.md`; dispatch's tuned tile size closes
   some but not most of the default-vs-vLLM gap (e.g. naive int8 at 2048

@@ -23,12 +23,15 @@ once a phase's exit criteria are actually met).
   after a whole-branch review found and fixed 20 real issues in this
   session's own new code, none affecting the measured GPU results;
   `docs/STATUS.md`, "Task 15 step 5").
-  **The kernel race is a real, disclosed loss**: vLLM 0.29.0's and SGLang
-  0.5.20's own fused-MoE beat dispatch's kernels at their shipped default
-  config at nearly every tested shape, bf16 and int8 alike, on the
-  identical GPU, model, and `torch==2.13.0`/`triton==3.7.1` build every
-  contestant shared — dispatch's naive kernel wins only at int8, 128 and
-  512 tokens. vLLM and SGLang both served the real model correctly across
+  **The kernel race is a real, disclosed loss**: vLLM 0.29.0 beats
+  dispatch's kernels at every one of the 28 measured (precision, token
+  count, distribution) combinations, bf16 and int8 alike, on the identical
+  GPU, model, and `torch==2.13.0`/`triton==3.7.1` build every contestant
+  shared — the gap runs 2.4-4.1x slower at 1 token, narrowing to
+  ~1.1-1.3x slower at 128 tokens and up, never closing. dispatch does beat
+  SGLang specifically at 128 and 512 tokens, both precisions — a real
+  result against one contestant, not the other. vLLM and SGLang both
+  served the real model correctly across
   concurrency 1/4/16/64 (vLLM ~6-9% ahead of SGLang throughout, e.g.
   1269.2 vs. 1180.4 output tok/s at concurrency 64); dispatch has no
   served, batched engine of its own to place in that same ranked table
