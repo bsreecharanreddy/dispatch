@@ -649,6 +649,21 @@ disclosed limitation, not a fudge. Total cost: **\$4.5448 of the \$10 cap**
 `docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`; runbook:
 `docs/runbooks/phase-6-final-benchmark.md`.
 
+## Phase 7 progress
+
+Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
+`docs/plans/2026-09-20-phase-7-productionization-plan.md`, 14 tasks. Branch
+`phase-7-productionization` (worktree).
+
+- [x] Task 1, 2026-09-20: `kind` installed (v0.33.0). Connectivity spike on
+      this machine (macOS, Docker Desktop): a pod inside a throwaway `kind`
+      cluster reached a plain `python3 -m http.server` listener on the dev
+      machine via `host.docker.internal:<port>` on the first try -- no
+      fallback host-gateway config needed. This is the hostname
+      `k8s/model-server-external.yaml` (Task 11) hardcodes for the
+      `ExternalName` Service the router uses to reach the (later,
+      SSH-tunneled) model server.
+
 ## Next step
 
 Phases 3 (PR #3), 4 (PR #4), 5a (PR #5), 5b (PR #6), and 6 (PR #8) are all
