@@ -28,7 +28,12 @@ class _FakeServer:
 
 
 class _StuckServer(_FakeServer):
+    """Ignores terminate()'s SIGTERM but, like a real process, does die once
+    kill() sends SIGKILL."""
+
     def wait(self, timeout: float) -> int:
+        if self.killed:
+            return 0
         raise subprocess.TimeoutExpired("server", timeout)
 
 
@@ -101,9 +106,39 @@ def test_a_bad_run_still_writes_the_earlier_evidence_and_stops_the_server(
     assert server.terminated
 
 
-def test_a_server_that_ignores_terminate_is_killed(tmp_path: Path) -> None:
+def test_a_server_that_ignores_terminate_is_killed_and_waited_on(tmp_path: Path) -> None:
     server = _StuckServer()
 
     _run(tmp_path, server, {1: _good_raw()})
 
     assert server.killed
+
+
+def test_a_launch_failure_still_writes_evidence_and_closes_the_log(tmp_path: Path) -> None:
+    """popen_fn raising (e.g. the engine binary isn't on PATH) happens before
+    the module's own try/finally used to start -- the evidence JSON must
+    still be written and the just-opened server log must not leak."""
+
+    def failing_popen(command: list[str], **kwargs: Any) -> Any:
+        raise FileNotFoundError("vllm: command not found")
+
+    with pytest.raises(FileNotFoundError):
+        run_engine_reference(
+            "vllm",
+            model="m",
+            port=8000,
+            concurrencies=[1],
+            output_dir=tmp_path,
+            run_label="ref",
+            gpu_cost_per_hour=0.72,
+            popen_fn=failing_popen,
+            run_fn=lambda *args, **kwargs: None,
+            get_fn=lambda url: 200,
+            sleep_fn=lambda seconds: None,
+            clock_fn=lambda: 0.0,
+        )
+
+    record = json.loads((tmp_path / "ref.json").read_text())
+    assert record["results"] == []
+    assert "FileNotFoundError" in record["error"]
+    assert (tmp_path / "ref-server.log").exists()

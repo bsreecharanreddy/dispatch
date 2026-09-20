@@ -5,8 +5,9 @@ engine, in the shared engines venv:
 
   python -m scripts.gpu.phase6_engine_reference --engine vllm --gpu-cost-per-hour 0.69
 
-The evidence JSON is written even when a later concurrency fails, so a
-partial run survives; the failure is then re-raised (non-zero exit).
+The evidence JSON is written even when a later concurrency fails, or the
+server itself never launches, so a partial run survives; the failure is
+then re-raised (non-zero exit).
 """
 
 from __future__ import annotations
@@ -64,12 +65,14 @@ def run_engine_reference(  # noqa: PLR0913 -- injectable process/network hooks m
     write_trace(trace_path, GATE_PROMPTS, TRACE_LINES)
     summaries: list[ServingSummary] = []
     error: str | None = None
+    server: Any = None
+    server_log: Any = None
 
-    server_log = (output_dir / f"{run_label}-server.log").open("w")
-    server = popen_fn(
-        build_serve_command(engine, model, port), stdout=server_log, stderr=server_log
-    )
     try:
+        server_log = (output_dir / f"{run_label}-server.log").open("w")
+        server = popen_fn(
+            build_serve_command(engine, model, port), stdout=server_log, stderr=server_log
+        )
         wait_until_healthy(
             f"http://127.0.0.1:{port}/health",
             get_fn=get_fn,
@@ -104,12 +107,15 @@ def run_engine_reference(  # noqa: PLR0913 -- injectable process/network hooks m
         error = f"{type(exc).__name__}: {exc}"
         raise
     finally:
-        server.terminate()
-        try:
-            server.wait(timeout=TERMINATE_GRACE_S)
-        except subprocess.TimeoutExpired:
-            server.kill()
-        server_log.close()
+        if server is not None:
+            server.terminate()
+            try:
+                server.wait(timeout=TERMINATE_GRACE_S)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.wait(timeout=TERMINATE_GRACE_S)
+        if server_log is not None:
+            server_log.close()
         (output_dir / f"{run_label}.json").write_text(
             json.dumps(
                 {
