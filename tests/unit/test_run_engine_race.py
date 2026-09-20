@@ -141,6 +141,50 @@ def test_int8_precision_checks_against_the_dequantized_reference(
     assert [result["status"] for result in results] == ["ok"]
 
 
+class _UnpreparableEngine:
+    """An engine with no kernel at all for one precision -- e.g. dispatch's
+    persistent backend has no int8 kernel (dispatch_kernels.py)."""
+
+    name = "unpreparable-engine"
+
+    def prepare_bf16(self, weights: StackedExpertWeights) -> LayerFactory:
+        return lambda case: lambda: torch.zeros_like(case.x, dtype=torch.float32)
+
+    def prepare_int8(self, qweights: QuantizedStackedExpertWeights) -> LayerFactory:
+        raise ValueError("no int8 kernel for backend 'persistent'")
+
+
+def test_an_engine_that_cannot_be_prepared_for_this_precision_is_refused_not_crashed(
+    small_dims: None, tmp_path: Path
+) -> None:
+    prepare_inputs(
+        tmp_path,
+        num_tokens=[3],
+        distributions=["uniform"],
+        dtype=torch.float32,
+        seed=0,
+        device="cpu",
+    )
+    good = DispatchEngine("torch")
+
+    results = run_engines(
+        tmp_path, [_UnpreparableEngine(), good], precision="int8", device="cpu", time_fn=_fake_timer
+    )
+
+    unpreparable = [r for r in results if r["variant"] == "unpreparable-engine"]
+    assert unpreparable == [
+        {
+            "num_tokens": None,
+            "distribution": None,
+            "variant": "unpreparable-engine",
+            "status": "refused",
+            "reason": "no int8 kernel for backend 'persistent'",
+        }
+    ]
+    # The other engine still ran: one bad variant doesn't lose the rest.
+    assert any(r["variant"] == good.name and r["status"] == "ok" for r in results)
+
+
 def test_an_engine_that_disagrees_with_the_reference_is_refused_not_timed(
     small_dims: None, tmp_path: Path
 ) -> None:

@@ -130,15 +130,32 @@ def run_engines(
     time_fn: TimeFn | None = None,
 ) -> list[dict[str, Any]]:
     """One result per (engine variant, case). A variant whose output disagrees
-    with the fp32 reference is recorded as refused and never timed."""
+    with the fp32 reference is recorded as refused and never timed; so is a
+    variant that cannot even be prepared for this precision (e.g. dispatch's
+    persistent kernel has no int8 path) -- either way the evidence for every
+    other variant already run survives."""
     manifest = json.loads((inputs_dir / MANIFEST).read_text())
     weights, qweights = _load_weights(inputs_dir, device)
     timer = time_fn or _do_bench_timer
     results: list[dict[str, Any]] = []
     for engine in engines:
-        factory = (
-            engine.prepare_bf16(weights) if precision == "bf16" else engine.prepare_int8(qweights)
-        )
+        try:
+            factory = (
+                engine.prepare_bf16(weights)
+                if precision == "bf16"
+                else engine.prepare_int8(qweights)
+            )
+        except Exception as exc:  # any prep failure is a refusal, not a crash
+            results.append(
+                {
+                    "num_tokens": None,
+                    "distribution": None,
+                    "variant": engine.name,
+                    "status": "refused",
+                    "reason": _first_line(exc),
+                }
+            )
+            continue
         for tokens in manifest["num_tokens"]:
             for distribution in manifest["distributions"]:
                 case, reference = _load_case(inputs_dir, tokens, distribution, precision, device)
@@ -151,7 +168,7 @@ def run_engines(
                 try:
                     assert_matches_reference(bound(), reference)
                 except AssertionError as exc:
-                    entry.update(status="refused", reason=str(exc).splitlines()[0])
+                    entry.update(status="refused", reason=_first_line(exc))
                     results.append(entry)
                     continue
                 flops = 3 * grouped_gemm_flops(
@@ -330,6 +347,14 @@ def _load_case(
     loaded = load_file(str(inputs_dir / _case_file(num_tokens, distribution)), device=device)
     case = RaceCase(x=loaded["x"], topk_idx=loaded["topk_idx"], topk_weight=loaded["topk_weight"])
     return case, loaded["ref_bf16" if precision == "bf16" else "ref_int8"]
+
+
+def _first_line(exc: BaseException) -> str:
+    """A short, single-line reason for a results entry. `str(exc)` is empty
+    for some exception types (bare `raise ValueError`), and `"".splitlines()`
+    is `[]` -- indexing that unconditionally is its own crash."""
+    text = str(exc)
+    return text.splitlines()[0] if text else type(exc).__name__
 
 
 def _load_race_record(path: Path) -> dict[str, Any]:
