@@ -40,6 +40,8 @@ class GapSplitAgreement:
 
     @property
     def top1_agreement(self) -> float:
+        if self.positions == 0:
+            raise ValueError("cannot compute top1_agreement over zero positions")
         return (self.positions - self.disagreements) / self.positions
 
     def to_dict(self) -> dict[str, float | int]:

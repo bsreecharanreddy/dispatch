@@ -129,6 +129,21 @@ def test_aggregate_of_nothing_raises() -> None:
         aggregate_gap_split([])
 
 
+def test_top1_agreement_over_zero_positions_is_refused_not_a_zerodivisionerror() -> None:
+    result = GapSplitAgreement(
+        positions=0,
+        disagreements=0,
+        near_tie_disagreements=0,
+        large_gap_disagreements=0,
+        max_disagreement_gap=0.0,
+    )
+
+    with pytest.raises(ValueError, match="zero positions"):
+        _ = result.top1_agreement
+    with pytest.raises(ValueError, match="zero positions"):
+        result.to_dict()
+
+
 def test_mismatched_keys_and_shapes_raise() -> None:
     reference = _logits(_row(10.0, 4.0, winner=0))
     with pytest.raises(ValueError, match="key mismatch"):
