@@ -54,3 +54,6 @@ graphify-out/
 # Subagent-driven-development scratch workspace (ledgers, briefs, review
 # packages) -- process artifacts, not project history.
 .superpowers/
+
+# Rust
+/router/target/
