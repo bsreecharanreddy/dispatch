@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from dispatch.benchmark.race_summary import render_markdown, summarize_race
 
 
@@ -126,3 +128,13 @@ def test_custom_token_counts_outside_the_registry_sort_by_their_own_value() -> N
     text = render_markdown(summarize_race([record]))
 
     assert text.index("| 999 |") < text.index("| 1500 |")
+
+
+def test_two_conflicting_measurements_for_the_same_cell_are_refused_not_silently_dropped() -> None:
+    """A results directory with a stale re-run left alongside a fresh one
+    must not silently pick one and hide the conflict."""
+    stale = _record("vllm", [_result("vllm", 16, "uniform", 9.9)], tuning_label="tuned")
+    fresh = _record("vllm", [_result("vllm", 16, "uniform", 0.5)], tuning_label="tuned")
+
+    with pytest.raises(ValueError, match="two measurements"):
+        render_markdown(summarize_race([stale, fresh]))

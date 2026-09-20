@@ -59,7 +59,16 @@ def render_markdown(rows: list[RaceRow]) -> str:
     for precision, tuning in sorted({(row.precision, row.tuning) for row in rows}):
         subset = [row for row in rows if (row.precision, row.tuning) == (precision, tuning)]
         engines = sorted({row.engine for row in subset})
-        lookup = {(row.num_tokens, row.distribution, row.engine): row for row in subset}
+        lookup: dict[tuple[int, str, str], RaceRow] = {}
+        for row in subset:
+            key = (row.num_tokens, row.distribution, row.engine)
+            if key in lookup:
+                raise ValueError(
+                    f"two measurements for {row.engine} at {row.num_tokens} tokens, "
+                    f"{row.distribution} routing ({precision}, {tuning}) -- merge input "
+                    "has two conflicting race JSONs for the same cell; remove the stale one"
+                )
+            lookup[key] = row
         keys = sorted(
             {(row.num_tokens, row.distribution) for row in subset},
             key=lambda key: (_token_rank(key[0]), key[1]),
