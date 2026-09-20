@@ -702,6 +702,11 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       a capacity-1 `tokio::sync::Semaphore` plus an `AtomicUsize` waiting
       counter for the `queue_depth` gauge Task 5 wires up. `cargo test`,
       `cargo fmt`, `cargo clippy -D warnings` all clean.
+- [x] Task 5, 2026-09-20: router Prometheus metrics (`router/src/metrics.rs`)
+      -- `RouterMetrics` registers `dispatch_router_requests_total`,
+      `..._ttft_seconds`, `..._inter_token_latency_seconds`,
+      `..._queue_depth` on its own `Registry`, with `.encode()` for the
+      `/metrics` HTTP handler Task 7 adds. `cargo test`/`fmt`/`clippy` clean.
 
 ## Next step
 
