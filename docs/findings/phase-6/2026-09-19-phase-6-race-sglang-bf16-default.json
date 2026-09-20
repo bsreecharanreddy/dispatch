@@ -1,0 +1,197 @@
+{
+  "config": {
+    "engine": "sglang",
+    "precision": "bf16",
+    "tuning_label": "default",
+    "block_ms": null,
+    "inputs": {
+      "hidden_size": 2048,
+      "moe_intermediate_size": 1408,
+      "n_routed_experts": 64,
+      "num_experts_per_tok": 6,
+      "dtype": "bfloat16",
+      "seed": 0,
+      "num_tokens": [
+        1,
+        4,
+        16,
+        64,
+        128,
+        512,
+        2048
+      ],
+      "distributions": [
+        "uniform",
+        "zipf"
+      ],
+      "prepared_on": {
+        "torch": "2.13.0+cu130",
+        "cuda": "13.0",
+        "gpu": "NVIDIA L40",
+        "triton": "3.7.1",
+        "vllm": "0.29.0",
+        "sglang": null,
+        "VLLM_TUNED_CONFIG_FOLDER": null,
+        "VLLM_TUNED_CONFIG_FOLDER_files": [],
+        "SGLANG_MOE_CONFIG_DIR": null,
+        "SGLANG_MOE_CONFIG_DIR_files": []
+      }
+    },
+    "do_bench_warmup_ms": 25,
+    "do_bench_rep_ms": 100,
+    "environment": {
+      "torch": "2.13.0+cu130",
+      "cuda": "13.0",
+      "gpu": "NVIDIA L40",
+      "triton": "3.7.1",
+      "vllm": null,
+      "sglang": "0.5.20",
+      "VLLM_TUNED_CONFIG_FOLDER": null,
+      "VLLM_TUNED_CONFIG_FOLDER_files": [],
+      "SGLANG_MOE_CONFIG_DIR": null,
+      "SGLANG_MOE_CONFIG_DIR_files": []
+    }
+  },
+  "results": [
+    {
+      "num_tokens": 1,
+      "distribution": "uniform",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 0.22693238490157658,
+      "p50_ms": 0.2269439995288849,
+      "p99_ms": 0.23894912123680134,
+      "tflops": 0.45744473202898417
+    },
+    {
+      "num_tokens": 1,
+      "distribution": "zipf",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 0.2291754313179704,
+      "p50_ms": 0.22700800001621246,
+      "p99_ms": 0.5387091070413578,
+      "tflops": 0.4529675079174161
+    },
+    {
+      "num_tokens": 4,
+      "distribution": "uniform",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 0.6733592256758977,
+      "p50_ms": 0.6732479929924011,
+      "p99_ms": 0.6772051131725312,
+      "tflops": 0.616663558122633
+    },
+    {
+      "num_tokens": 4,
+      "distribution": "zipf",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 0.573352827594198,
+      "p50_ms": 0.5721279978752136,
+      "p99_ms": 0.5821068835258484,
+      "tflops": 0.7242243798506068
+    },
+    {
+      "num_tokens": 16,
+      "distribution": "uniform",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 1.3587418655554453,
+      "p50_ms": 1.3578400015830994,
+      "p99_ms": 1.4343759763240809,
+      "tflops": 1.2224134886143483
+    },
+    {
+      "num_tokens": 16,
+      "distribution": "zipf",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 1.1187497511715956,
+      "p50_ms": 1.1151679754257202,
+      "p99_ms": 1.1199071884155272,
+      "tflops": 1.484643355013575
+    },
+    {
+      "num_tokens": 64,
+      "distribution": "uniform",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 1.7469979971647263,
+      "p50_ms": 1.7472959756851196,
+      "p99_ms": 1.7522457885742186,
+      "tflops": 3.8029680324662394
+    },
+    {
+      "num_tokens": 64,
+      "distribution": "zipf",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 1.635922205214407,
+      "p50_ms": 1.636191964149475,
+      "p99_ms": 1.6423519849777222,
+      "tflops": 4.061181830543863
+    },
+    {
+      "num_tokens": 128,
+      "distribution": "uniform",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 2.5647143335903393,
+      "p50_ms": 2.5644800662994385,
+      "p99_ms": 2.5878675413131713,
+      "tflops": 5.1809103641569205
+    },
+    {
+      "num_tokens": 128,
+      "distribution": "zipf",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 2.5654756614140104,
+      "p50_ms": 2.5694398880004883,
+      "p99_ms": 2.5910508823394776,
+      "tflops": 5.179372882717707
+    },
+    {
+      "num_tokens": 512,
+      "distribution": "uniform",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 2.7289059832692146,
+      "p50_ms": 2.727776050567627,
+      "p99_ms": 2.731937255859375,
+      "tflops": 19.47675024858362
+    },
+    {
+      "num_tokens": 512,
+      "distribution": "zipf",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 2.6945677598317466,
+      "p50_ms": 2.6888959407806396,
+      "p99_ms": 2.7076121616363524,
+      "tflops": 19.724952209522016
+    },
+    {
+      "num_tokens": 2048,
+      "distribution": "uniform",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 3.0198336044947305,
+      "p50_ms": 3.3646080493927,
+      "p99_ms": 3.3708505153656008,
+      "tflops": 70.40152173800706
+    },
+    {
+      "num_tokens": 2048,
+      "distribution": "zipf",
+      "variant": "sglang",
+      "status": "ok",
+      "mean_ms": 3.475707072478074,
+      "p50_ms": 3.5132319927215576,
+      "p99_ms": 3.5263839960098267,
+      "tflops": 61.167663649060614
+    }
+  ]
+}
