@@ -173,7 +173,7 @@ that was exceeded on one pod and raised to $20 with disclosure. Full
 account: `docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
 
 **Phase 6 (final benchmark vs. vLLM and SGLang) is complete, 2026-09-20**,
-on branch `phase-6-final-benchmark` (PR pending). The at-scale correctness
+merged to `main` via PR #8. The at-scale correctness
 gate Phase 5b flagged as owed was run: naive, persistent and int8 all
 agree with the stock reference at 1,036 positions (97.1-97.3% top-1
 agreement), zero large-gap disagreements against a pre-registered

@@ -13,7 +13,8 @@ No phase shipped yet (`v0.1.0` is still the scaffold version; a tag lands
 once a phase's exit criteria are actually met).
 
 - **Phase 6 (final benchmark vs. vLLM and SGLang) complete**, 2026-09-20,
-  branch `phase-6-final-benchmark` (PR pending)
+  merged to `main` via
+  [#8](https://github.com/bsreecharanreddy/dispatch/pull/8)
   (`docs/plans/2026-09-19-phase-6-final-benchmark-plan.md`). Ran the
   at-scale correctness gate Phase 5b flagged as owed: naive, persistent
   and int8 all agree with the stock reference at 1,036 positions

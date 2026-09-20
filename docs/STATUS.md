@@ -651,15 +651,16 @@ disclosed limitation, not a fudge. Total cost: **\$4.5448 of the \$10 cap**
 
 ## Next step
 
-Phases 3 (PR #3), 4 (PR #4), 5a (PR #5) and 5b (PR #6) are all merged, each
-on its own branch per the one-branch-per-phase convention.
+Phases 3 (PR #3), 4 (PR #4), 5a (PR #5), 5b (PR #6), and 6 (PR #8) are all
+merged, each on its own branch per the one-branch-per-phase convention.
 
-**Phase 6 is done, 2026-09-20** (design, plan, all 15 tasks, findings,
-runbook -- see "Phase 6 progress"). To be merged via a PR once the user
-approves pushing (branch `phase-6-final-benchmark`, not yet pushed as of
-this writing). The system design's phase table (§7) is now fully executed,
-Phase 0 through 6; Phase 7 (productionization: Rust router, Docker, K8s
-demoed once) is the only phase left unstarted.
+**Phase 6 merged to `main` via PR #8, 2026-09-20** (design, plan, all 15
+tasks, findings, runbook, a whole-branch review that found and fixed 20
+real issues, and a corrected headline result -- see "Phase 6 progress").
+Branch `phase-6-final-benchmark` deleted post-merge. The system design's
+phase table (§7) is now fully executed, Phase 0 through 6; Phase 7
+(productionization: Rust router, Docker, K8s demoed once) is the only
+phase left unstarted.
 
 Phase 2's PR is still open and awaiting maintainer review; no further work
 planned on it beyond responding to review feedback.
