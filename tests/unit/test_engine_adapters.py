@@ -236,3 +236,36 @@ def test_init_runs_once_and_publishes_the_runtime_config_however_often_it_is_cal
     assert len(published) == 1
     assert published[0]["dtype"] == "bfloat16"
     assert published[0]["trust_remote_code"] is True
+
+
+def test_init_publishes_the_dtype_it_is_given_not_a_hardcoded_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A race run under --dtype float16 must not publish a ServerArgs
+    claiming bfloat16 -- fused_experts reads this config, and the published
+    dtype must match the tensors actually flowing through it."""
+    published: list[dict[str, Any]] = []
+    parallel_state = ModuleType("sglang.srt.distributed.parallel_state")
+    parallel_state.init_distributed_environment = lambda **kwargs: None  # type: ignore[attr-defined]
+    parallel_state.initialize_model_parallel = lambda **kwargs: None  # type: ignore[attr-defined]
+
+    server_args = ModuleType("sglang.srt.server_args")
+
+    class FakeServerArgs:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+
+    server_args.ServerArgs = FakeServerArgs  # type: ignore[attr-defined]
+    server_args.set_global_server_args_for_scheduler = (  # type: ignore[attr-defined]
+        lambda args: published.append(args.kwargs)
+    )
+    for name in ("sglang", "sglang.srt", "sglang.srt.distributed"):
+        monkeypatch.setitem(sys.modules, name, ModuleType(name))
+    monkeypatch.setitem(sys.modules, "sglang.srt.distributed.parallel_state", parallel_state)
+    monkeypatch.setitem(sys.modules, "sglang.srt.server_args", server_args)
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
+    monkeypatch.setattr(sglang_moe, "_initialized", False)
+
+    sglang_moe.init_distributed(dtype="float16")
+
+    assert published[0]["dtype"] == "float16"

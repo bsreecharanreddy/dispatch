@@ -275,13 +275,13 @@ def _command_run(args: argparse.Namespace) -> None:
             "dispatch's default/tuned rows are derived from the --block-ms sweep, not "
             "chosen by this flag; pass --tuning-label sweep"
         )
+    manifest = json.loads((args.inputs_dir / MANIFEST).read_text())
     if args.engine == "sglang":
         from dispatch.benchmark.engines.sglang_moe import init_distributed  # noqa: PLC0415
 
-        init_distributed()
+        init_distributed(dtype=manifest["dtype"])
     engines = registry.build_engines(args.engine, args.block_ms)
     results = run_engines(args.inputs_dir, engines, precision=args.precision, device=args.device)
-    manifest = json.loads((args.inputs_dir / MANIFEST).read_text())
     record = {
         "config": {
             "engine": args.engine,

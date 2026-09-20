@@ -35,14 +35,17 @@ _initialized = False
 _SERVED_MODEL = "deepseek-ai/deepseek-moe-16b-base"
 
 
-def init_distributed() -> None:
+def init_distributed(*, dtype: str = "bfloat16") -> None:
     """SGLang's fused-MoE reads its tensor-parallel group even on one GPU, so
     a world-size-1 group must exist first. Mirrors SGLang's own
     benchmark/kernels/fused_moe_triton/ scripts. Also publishes a ServerArgs:
     fused_experts reads `get_exec()`, a config namespace SGLang only fills from
     one (found on the first real run: "config namespace 'exec' not published").
-    Idempotent: SGLang raises on a second initialize_model_parallel, so repeat
-    calls are no-ops."""
+    `dtype` should be the race's actual tensor dtype ("bfloat16"/"float16"),
+    not assumed -- a race run under --dtype float16 must not publish a config
+    claiming bfloat16. Idempotent: SGLang raises on a second
+    initialize_model_parallel, so repeat calls are no-ops, and whichever
+    dtype was in effect on the first call is what stays published."""
     global _initialized  # noqa: PLW0603 -- process-wide setup guard, by design
     if _initialized:
         return
@@ -68,7 +71,7 @@ def init_distributed() -> None:
     )
     initialize_model_parallel(tensor_model_parallel_size=1, pipeline_model_parallel_size=1)
     set_global_server_args_for_scheduler(
-        ServerArgs(model_path=_SERVED_MODEL, trust_remote_code=True, dtype="bfloat16")
+        ServerArgs(model_path=_SERVED_MODEL, trust_remote_code=True, dtype=dtype)
     )
     _initialized = True
 
