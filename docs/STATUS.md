@@ -663,6 +663,19 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       `k8s/model-server-external.yaml` (Task 11) hardcodes for the
       `ExternalName` Service the router uses to reach the (later,
       SSH-tunneled) model server.
+- [x] Task 2, 2026-09-20: shared `proto/dispatch.proto` and the Rust router
+      crate scaffold (`router/`), Rust 1.98.1 installed via rustup. One real
+      plan correction found live: `tonic_build::compile_protos` (the plan's
+      originally-written `build.rs` call) does not exist in tonic 0.14 --
+      that release split prost integration out of `tonic-build` into two
+      new crates, `tonic-prost-build` (build-time codegen) and `tonic-prost`
+      (the runtime `ProstCodec` the generated code references). Fixed by
+      switching to `tonic_prost_build::compile_protos` and adding
+      `tonic-prost` as a normal dependency; confirmed by reading
+      tonic-build 0.14.6's actual source after the original call failed to
+      compile, not guessed. `tonic::async_trait` (planned for later tasks'
+      mock gRPC servers) is unaffected -- still re-exported at tonic's
+      crate root, confirmed the same way.
 
 ## Next step
 
