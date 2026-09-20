@@ -9,7 +9,7 @@ import functools
 
 import torch
 
-from dispatch.benchmark.engines.base import LayerFactory, RaceCase
+from dispatch.benchmark.engines.base import DEFAULT_BLOCK_M, LayerFactory, RaceCase
 from dispatch.kernels.backends import resolve_backend, resolve_quantized_backend
 from dispatch.kernels.moe_forward import StackedExpertWeights, grouped_moe_routed
 from dispatch.kernels.quantization import (
@@ -21,7 +21,7 @@ from dispatch.kernels.quantization import (
 
 
 class DispatchEngine:
-    def __init__(self, backend: str, *, block_m: int = 16) -> None:
+    def __init__(self, backend: str, *, block_m: int = DEFAULT_BLOCK_M) -> None:
         self.name = f"dispatch-{backend}-bm{block_m}"
         self._backend = backend
         self._block_m = block_m

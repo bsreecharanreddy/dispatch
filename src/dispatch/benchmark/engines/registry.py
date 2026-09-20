@@ -5,11 +5,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from dispatch.benchmark.engines.base import MoEEngine
+from dispatch.benchmark.engines.base import DEFAULT_BLOCK_M, MoEEngine
 from dispatch.benchmark.engines.dispatch_kernels import DispatchEngine
 
 ENGINE_NAMES = ("dispatch-naive", "dispatch-persistent", "vllm", "sglang")
-DEFAULT_BLOCK_MS = (16, 32, 64, 128)
+DEFAULT_BLOCK_MS = (DEFAULT_BLOCK_M, 32, 64, 128)
 
 
 def build_engines(engine: str, block_ms: Sequence[int] = DEFAULT_BLOCK_MS) -> list[MoEEngine]:

@@ -37,6 +37,11 @@ NUM_EXPERTS_PER_TOK = 6
 # extend Phase 1's tables and decode-sized batches are better covered.
 TOKEN_COUNTS = (1, 4, 16, 64, 128, 512, 2048)
 
+# The grouped-GEMM kernels' own tile-size default. registry.DEFAULT_BLOCK_MS,
+# DispatchEngine.__init__'s block_m default, and race_summary's "default" row
+# selection all key off this one constant so they cannot drift apart.
+DEFAULT_BLOCK_M = 16
+
 
 @dataclass(frozen=True)
 class RaceCase:

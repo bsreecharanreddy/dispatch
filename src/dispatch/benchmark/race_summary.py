@@ -16,9 +16,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from dispatch.benchmark.engines.base import TOKEN_COUNTS
+from dispatch.benchmark.engines.base import DEFAULT_BLOCK_M, TOKEN_COUNTS
 
-DEFAULT_BLOCK_M = 16
 TUNING_DISTRIBUTION = "uniform"
 
 
@@ -122,5 +121,10 @@ def _block_m(variant: str) -> int:
     return int(variant.rsplit("-bm", 1)[1])
 
 
-def _token_rank(num_tokens: int) -> int:
-    return TOKEN_COUNTS.index(num_tokens) if num_tokens in TOKEN_COUNTS else len(TOKEN_COUNTS)
+def _token_rank(num_tokens: int) -> tuple[int, int]:
+    """Registered token counts sort first, in TOKEN_COUNTS order; any others
+    sort after, by their own value -- never by a shared placeholder rank,
+    which would make their relative order depend on set-iteration order."""
+    if num_tokens in TOKEN_COUNTS:
+        return (0, TOKEN_COUNTS.index(num_tokens))
+    return (1, num_tokens)

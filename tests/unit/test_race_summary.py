@@ -108,3 +108,21 @@ def test_markdown_has_one_table_per_precision_and_tuning_with_a_column_per_engin
     assert "| tokens | routing | dispatch-naive | vllm |" in text
     assert "| 16 | uniform | 0.600 / 0.720 | 0.500 / 0.600 |" in text
     assert "| 16 | zipf | 0.900 / 1.080 | n/a |" in text
+
+
+def test_custom_token_counts_outside_the_registry_sort_by_their_own_value() -> None:
+    """Two num_tokens values neither in TOKEN_COUNTS must not share a rank --
+    a shared rank falls back to set-iteration order, which is hash-seed
+    dependent and can silently reorder the table between two runs."""
+    record = _record(
+        "vllm",
+        [
+            _result("vllm", 1500, "uniform", 0.5, status="ok"),
+            _result("vllm", 999, "uniform", 0.4, status="ok"),
+        ],
+        tuning_label="tuned",
+    )
+
+    text = render_markdown(summarize_race([record]))
+
+    assert text.index("| 999 |") < text.index("| 1500 |")
