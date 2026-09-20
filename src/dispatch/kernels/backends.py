@@ -10,6 +10,12 @@ from dispatch.kernels.quantization import QuantizedGroupedMatmul
 BACKENDS = ("torch", "naive", "persistent")
 QUANTIZED_BACKEND = "quantized"
 
+# Which of BACKENDS has an int8 kernel: "torch" (the dequantized eager
+# reference) and "naive" (Phase 5a's real int8 kernel, built on the naive
+# launch order only). Named here, the one place backend capability is
+# decided, instead of as an inline if/elif in each caller.
+QUANTIZED_BACKENDS = ("torch", "naive")
+
 
 def resolve_backend(name: str) -> GroupedMatmul:
     if name == "torch":

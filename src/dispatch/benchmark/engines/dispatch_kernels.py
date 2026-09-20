@@ -10,7 +10,7 @@ import functools
 import torch
 
 from dispatch.benchmark.engines.base import DEFAULT_BLOCK_M, LayerFactory, RaceCase
-from dispatch.kernels.backends import resolve_backend, resolve_quantized_backend
+from dispatch.kernels.backends import QUANTIZED_BACKENDS, resolve_backend, resolve_quantized_backend
 from dispatch.kernels.moe_forward import StackedExpertWeights, grouped_moe_routed
 from dispatch.kernels.quantization import (
     QuantizedGroupedMatmul,
@@ -61,11 +61,12 @@ class DispatchEngine:
         return bind
 
     def _quantized_matmul(self) -> QuantizedGroupedMatmul:
+        if self._backend not in QUANTIZED_BACKENDS:
+            raise ValueError(
+                f"no int8 kernel for backend {self._backend!r}; expected one of "
+                f"{QUANTIZED_BACKENDS} (Phase 5a's int8 kernel is built on the naive "
+                "launch order only)"
+            )
         if self._backend == "torch":
             return torch_grouped_matmul_dequant
-        if self._backend == "naive":
-            return resolve_quantized_backend()
-        raise ValueError(
-            f"no int8 kernel for backend {self._backend!r}: Phase 5a's int8 kernel is "
-            "built on the naive launch order only"
-        )
+        return resolve_quantized_backend()
