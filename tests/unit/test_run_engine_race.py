@@ -254,6 +254,42 @@ def test_main_run_writes_the_record_then_exits_nonzero_on_a_refusal(
     assert "environment" in record["config"]
 
 
+def test_a_tuning_label_other_than_sweep_is_rejected_for_a_dispatch_engine(
+    small_dims: None, tmp_path: Path
+) -> None:
+    """summarize_race derives dispatch's default/tuned rows from the
+    --block-ms sweep alone -- any other --tuning-label value is silently
+    ignored downstream, so it must be refused upfront instead."""
+    inputs = tmp_path / "inputs"
+    prepare_inputs(
+        inputs,
+        num_tokens=[3],
+        distributions=["uniform"],
+        dtype=torch.float32,
+        seed=0,
+        device="cpu",
+    )
+
+    with pytest.raises(SystemExit, match="has no effect for 'dispatch-naive'"):
+        main(
+            [
+                "run",
+                "--inputs-dir",
+                str(inputs),
+                "--engine",
+                "dispatch-naive",
+                "--precision",
+                "bf16",
+                "--tuning-label",
+                "default",
+                "--device",
+                "cpu",
+                "--output-dir",
+                str(tmp_path / "out"),
+            ]
+        )
+
+
 def test_environment_records_tuned_config_provenance(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

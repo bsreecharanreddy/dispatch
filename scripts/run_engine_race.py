@@ -266,6 +266,15 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _command_run(args: argparse.Namespace) -> None:
+    if args.engine.startswith("dispatch-") and args.tuning_label != "sweep":
+        # race_summary.summarize_race derives dispatch's "default"/"tuned"
+        # rows entirely from the --block-ms sweep; it never reads this flag
+        # for a dispatch-* engine, so any other value is silently a no-op.
+        raise SystemExit(
+            f"--tuning-label {args.tuning_label!r} has no effect for {args.engine!r} -- "
+            "dispatch's default/tuned rows are derived from the --block-ms sweep, not "
+            "chosen by this flag; pass --tuning-label sweep"
+        )
     if args.engine == "sglang":
         from dispatch.benchmark.engines.sglang_moe import init_distributed  # noqa: PLC0415
 
