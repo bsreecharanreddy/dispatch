@@ -583,29 +583,42 @@ machine) -- that is Task 10's first job on the pod.
 - **Task 13 (engine reference), vLLM done, 2026-09-19**: dispatch concurrency-1 rows (stock 11.87 tok/s, naive 21.04 tok/s -- consistent with Phase 1's 12.55/20.98 tok/s at a different prompt count). vLLM served the real model over 4 concurrencies cleanly: out_tok/s 115.5 (c1) -> 225.7 (c4) -> 444.9 (c16) -> 1269.2 (c64); p50 TTFT 37.9ms -> 174.1ms; $/Mtok 1.97 -> 0.18 at the measured $0.82/hr. One real fix shipped mid-run: vLLM 0.29.0's --save-detailed output carries no per-request end-to-end latencies key at all -- only per-request ttft and the inter-token gaps that follow it -- so summarize_bench_result now derives it as ttft+sum(gaps) (3acf14c). Also needed vllm[bench]'s pandas dependency, installed on the pod (not yet in any pyproject group, since the engines venv is pod-local and never installed via this repo's own dependency groups).
 
 - **Task 13 (engine reference), SGLang done; Task 14 (evidence + teardown) done, 2026-09-19/20**: SGLang served the real model cleanly across all 4 concurrencies: out_tok/s 108.6 (c1) -> 207.5 (c4) -> 405.5 (c16) -> 1180.4 (c64); p50 TTFT 54.9ms -> 135.8ms; \$/Mtok 2.10 -> 0.19. One fix needed: the serving driver's subprocess PATH had vllm-venv before sglang-venv, so the bare `python` used to launch `sglang.launch_server` resolved to the wrong interpreter (no sglang installed) -- a pod-local invocation-order fix, not a code change. All 31 non-safetensors evidence files pulled via rsync over direct SSH (not the PTY-only proxy runbook 5b needed -- this pod exposed both) and diffed byte-for-byte identical against the pod's own file list before the pod was terminated. **Total measured cost: \$4.5448 of the \$10 cap** (RunPod's own billing API, not rate x duration), pod `97jlyai5sowyeq` terminated and confirmed gone (404 on lookup).
+- [x] Task 15, 2026-09-20: findings doc, runbook, this update.
+
+**Phase 6 is complete, 2026-09-20.** `make check` green throughout (246
+tests, lint and `mypy --strict` clean). **On this GPU (L40) and these
+shapes, vLLM's and SGLang's own fused-MoE beat dispatch's kernels at their
+shipped default config at nearly every routed-expert shape tested, in both
+bf16 and int8** -- a real, disclosed negative result: dispatch's naive
+kernel wins only at int8, 128 and 512 tokens. The at-scale correctness gate
+(owed since Phase 5a) passed for every kernel at 1,036 positions,
+97.1-97.3% top-1 agreement, zero large-gap disagreements against the
+pre-registered 1.0 threshold -- replacing Phase 5a's 29-position claim.
+vLLM and SGLang both served the real model correctly across concurrency
+1/4/16/64 (vLLM ahead of SGLang at every point, ~6-9% on throughput);
+dispatch has no serving stack to place in that same ranked table, so its
+own concurrency-1 numbers (naive kernel: 21.04 tok/s, a ~1.8x speedup over
+stock's 11.87, consistent with Phase 1) are reported alongside it, labeled
+non-comparable. vLLM's and SGLang's own tuners were not run to completion
+(a live check found ~18 minutes per token count, all-or-nothing per
+run -- confirmed by starting one, watching it, and killing it before
+wasting more) -- both engines are shown at default configuration only, a
+disclosed limitation, not a fudge. Total cost: **\$4.5448 of the \$10 cap**
+(RunPod's billing API). Full account:
+`docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`; runbook:
+`docs/runbooks/phase-6-final-benchmark.md`.
 
 ## Next step
 
-Phase 5b is done: root cause fixed, real numbers measured, both
-correctness gates and the full k-sweep checked and explained. Phase 4 is
-merged (PR #4), as are Phase 5a (PR #5) and Phase 5b (PR #6), each on its
-own branch per the one-branch-per-phase convention. Phase 3's PR (#3) also
-merged.
-Phase 2's PR is still open and awaiting maintainer review; no further
-work planned on it beyond responding to review feedback.
+Phases 3 (PR #3), 4 (PR #4), 5a (PR #5) and 5b (PR #6) are all merged, each
+on its own branch per the one-branch-per-phase convention.
 
-Phase 6's design is approved and its implementation plan is written
-(see "Phase 6 progress"). **Tasks 1-9 (the local, free, TDD half) are done**,
-one commit each, `make check` green (244 passed, 3 skipped `gpu`).
+**Phase 6 is done, 2026-09-20** (design, plan, all 15 tasks, findings,
+runbook -- see "Phase 6 progress"). To be merged via a PR once the user
+approves pushing (branch `phase-6-final-benchmark`, not yet pushed as of
+this writing). The system design's phase table (§7) is now fully executed,
+Phase 0 through 6; Phase 7 (productionization: Rust router, Docker, K8s
+demoed once) is the only phase left unstarted.
 
-**Task 10 (the paid pod session) has not started, on purpose: the L40 was out
-of stock on 2026-09-19.** Live RunPod catalog that day: L40 Secure $0.82/hr
-with availability NONE and CUDA 13.0 hosts unavailable (vllm 0.29.0 and
-sglang 0.5.20 need CUDA 13). In-stock same-class alternatives were the L40S
-($1.09/hr, Ada, stock MEDIUM) and the A40 ($0.49/hr, Ampere, stock HIGH). The
-user's decision was to **wait for the L40** rather than substitute either:
-no spend, and Phase 6 keeps the same GPU class as Phase 1 and 5a so its tables
-extend theirs. To resume: re-check L40 stock, state the live price, get the
-user's go-ahead, then start Task 10 of
-`docs/plans/2026-09-19-phase-6-final-benchmark-plan.md` (Tasks 10-14 are the
-paid session, $10 cap, checkpoints at $5 and $8).
+Phase 2's PR is still open and awaiting maintainer review; no further work
+planned on it beyond responding to review feedback.

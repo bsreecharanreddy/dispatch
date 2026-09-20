@@ -30,9 +30,12 @@ result was a null or a mixed one, it's reported that way.
 > [#5](https://github.com/bsreecharanreddy/dispatch/pull/5) Phase 5a,
 > [#6](https://github.com/bsreecharanreddy/dispatch/pull/6) Phase 5b) —
 > Phase 2 landed as docs only, its actual contribution being the
-> upstreamed vLLM PR below, not a dispatch-repo code change. Phase 6
-> (final benchmark vs. vLLM/SGLang) is next. Full task-by-task record:
-> [`docs/STATUS.md`](docs/STATUS.md). Design and phasing:
+> upstreamed vLLM PR below, not a dispatch-repo code change. **Phase 6
+> (final benchmark vs. vLLM/SGLang) is complete**, on branch
+> `phase-6-final-benchmark`, PR pending. This closes the system design's
+> full phase plan (0-6); only Phase 7 (productionization) remains. Full
+> task-by-task record: [`docs/STATUS.md`](docs/STATUS.md). Design and
+> phasing:
 > [`docs/design/2026-09-14-dispatch-system-design.md`](docs/design/2026-09-14-dispatch-system-design.md).
 
 ## In sixty seconds
@@ -48,7 +51,7 @@ the answer was a null or mixed result.
 serving path, an upstreamed open-source benchmark contribution, every
 rented-GPU session, and the write-ups of what broke along the way.
 
-**Measured across nine rented-GPU sessions (seven phases), $39.95 total,
+**Measured across ten rented-GPU sessions (eight phases), $44.49 total,
 every phase within its stated cap except Phase 5b, whose original $10 cap
 was exceeded on one pod and raised to $20 with disclosure:** a custom Triton kernel **~65-73% faster** than DeepSeek's own
 stock MoE forward pass at perfect logit agreement (Phase 1); an opt-in
@@ -67,9 +70,15 @@ project's own review, then root-caused to a `transformers` loading bug
 (uninitialized RoPE buffers) and re-measured — where only the model-free
 prompt-lookup drafter beat the baseline, and byte-exact agreement with
 greedy decoding turned out to be limited by near-tied logits in the int8
-kernel (Phase 5b).
+kernel (Phase 5b); and the head-to-head this whole project was built
+toward — **vLLM's and SGLang's own fused-MoE beat dispatch's kernel at
+its shipped default config on nearly every tested shape**, in both bf16
+and int8, on the same GPU, same model, same Triton compiler as every
+contestant, with the at-scale correctness gate this project owed since
+Phase 5a finally measured (97.1-97.3% top-1 agreement at 1,036 positions,
+zero large-gap disagreements) (Phase 6).
 
-**170 tests, `make check` green throughout Phase 5b** (lint, `mypy --strict`,
+**246 tests, `make check` green throughout Phase 6** (lint, `mypy --strict`,
 and the full non-GPU suite) — GPU-dependent tests are marked and excluded
 from CI by design, then run for real on rented hardware every phase.
 
@@ -167,9 +176,10 @@ including the ones that came back null or mixed:
 | **4 — disaggregated prefill/decode** | Does separating prefill and decode across GPU pools relieve contention, holding GPU count fixed at 4? | **Mixed, not a clean result.** Disaggregated TTFT beats co-located at concurrency 4 (0.46s vs 1.12s) but loses at concurrency 8 (0.98s vs 0.70s) — most likely a kernel-warmup confound between independent process launches, reported as genuinely inconclusive rather than forced |
 | **5a — int8 quantization** | Does a self-computed, per-channel int8 weight-only kernel cut memory with no model-level correctness cost? | **Yes on both counts, no speedup.** **49.89%** expert-weight memory reduction, perfect top-1/mutual-top-k agreement vs. the naive bf16 kernel at every tested position (29 positions, one run -- a small sample; see 5b for the near-tie sensitivity it could not rule out). Throughput was a near-exact tie with naive (**-1.2%**), as expected — weight-only quantization saves memory bandwidth, not FLOPs. A real bug (quantizing without freeing the original bf16 weights, OOMing a 44GB L40) was found and fixed mid-session |
 | **5b — speculative decoding** | Does speculative decoding (a 7B draft model, or model-free prompt-lookup) speed up single-request decode on the int8 target while reproducing plain greedy output exactly? | **Partly, and not exactly.** A40, bf16, unbatched, baseline **25.18 tok/s**: only prompt-lookup beats it (**34.4-50.9 tok/s** across k=1-8, +77.7% at k=4); the 7B draft model is *below* baseline at every k (19.6-23.0) despite 2-7x higher acceptance. Output matched plain greedy in 13 of 16 (prompt, k) combinations for draft-model and 9 of 16 for prompt-lookup; the same k=4 config matched 2/4 prompts in one process and 3/4 in another. Root-caused to near-tied logits under the int8 kernel's floating-point precision, not a logic bug. The first session's numbers were withdrawn by this project's own review (degenerate baseline) and root-caused to a `transformers` bug leaving DeepSeek's RoPE buffers uninitialized |
+| **6 — final benchmark** | On the same L40, same model, same Triton compiler, how does dispatch's kernel compare with vLLM's and SGLang's own fused-MoE, at default and at scale, and does the correctness claim hold past a 29-position sample? | **vLLM's and SGLang's default config beat dispatch at nearly every shape**, bf16 and int8 alike (dispatch's naive kernel wins only at int8, 128/512 tokens). The at-scale gate passed for every kernel: **97.1-97.3% top-1 agreement at 1,036 positions, zero large-gap disagreements** against a pre-registered 1.0-logit threshold — replacing Phase 5a's 29-position claim. vLLM and SGLang both served the real model correctly across concurrency 1-64 (vLLM ~6-9% ahead of SGLang throughout); dispatch's own harness has no served, batched engine to place in that same table. vLLM's and SGLang's own tuners were not run to completion (~18 min/token-count, all-or-nothing per run — confirmed live, not assumed) — both shown at default config only, disclosed rather than glossed over |
 
 Full method and every number: one folder per phase in
-[`docs/findings/`](docs/findings/) (`phase-0/` through `phase-5b/`), each
+[`docs/findings/`](docs/findings/) (`phase-0/` through `phase-6/`), each
 with a run doc and a cost doc.
 
 ## What it does not do
@@ -199,7 +209,7 @@ doc's own scope boundaries:
 | Kernel | Custom Triton grouped-GEMM (naive + persistent/cache-aware), int8 weight-only quantization (Phase 5a) |
 | Multi-GPU | DeepSeek's DeepEP — real all-to-all expert-parallel dispatch/combine over NVLink/SXM |
 | Serving | Continuous-batching prefill/decode workers, both co-located and disaggregated topologies; speculative decoding (draft-model and prompt-lookup drafters, Phase 5b) |
-| Benchmark methodology | vLLM/SGLang-style metrics — TTFT, inter-token latency, tokens/sec, cost per million tokens |
+| Benchmark methodology | Measured head-to-head against real vLLM 0.29.0 and SGLang 0.5.20, same GPU, same model, same Triton compiler (Phase 6) — TTFT, inter-token latency, tokens/sec, cost per million tokens |
 | Language | Python 3.12+ — `uv`, `ruff`, `mypy --strict`, `pytest` |
 | GPU provisioning | RunPod's API via lightweight scripts (`scripts/gpu/`) — not Terraform; see `CLAUDE.md`'s cost discipline |
 | CI | GitHub Actions — lint, `mypy --strict`, and the non-GPU suite on every push |
@@ -272,11 +282,16 @@ is the authoritative architecture, phasing, and scope document.
   and the open [vLLM PR](https://github.com/vllm-project/vllm/pull/57100): a
   real gap found by checking what a production project already ships, not
   duplicating it.
+- **Anyone who wants the head-to-head, not just the internal comparisons** —
+  [Phase 6's findings doc](docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md):
+  a real kernel race and served-engine comparison against vLLM 0.29.0 and
+  SGLang 0.5.20 on the same GPU, reported as a loss for dispatch's kernel
+  at most tested shapes, not reframed as a win.
 - **Anyone checking whether the claims hold** — [`docs/STATUS.md`](docs/STATUS.md)
   and [`docs/findings/`](docs/findings/), where a null or mixed result
   (Phase 1's persistent-kernel tie, Phase 3's crossover disappearing,
-  Phase 4's inconclusive disaggregation number) is reported as such rather
-  than smoothed over.
+  Phase 4's inconclusive disaggregation number, Phase 6's own kernel losing
+  most of the race) is reported as such rather than smoothed over.
 
 `CLAUDE.md` is instructions for AI coding assistants working in this repo,
 not a document for a human evaluating the project.

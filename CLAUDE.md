@@ -172,6 +172,40 @@ scale on the benchmarked config instead of leaning on 5a's number. Cost: **$12.2
 that was exceeded on one pod and raised to $20 with disclosure. Full
 account: `docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
 
+**Phase 6 (final benchmark vs. vLLM and SGLang) is complete, 2026-09-20**,
+on branch `phase-6-final-benchmark` (PR pending). The at-scale correctness
+gate Phase 5b flagged as owed was run: naive, persistent and int8 all
+agree with the stock reference at 1,036 positions (97.1-97.3% top-1
+agreement), zero large-gap disagreements against a pre-registered
+1.0-logit threshold -- Phase 5a's 29-position claim is superseded by this
+number for these configs. **The kernel race is a real, disclosed loss for
+dispatch**: vLLM 0.29.0's and SGLang 0.5.20's own fused-MoE beat dispatch's
+kernels at their shipped default config at nearly every tested shape (bf16
+and int8), on the identical GPU, model, and `torch`/`triton` build as every
+contestant -- dispatch's naive kernel wins only at int8, 128 and 512
+tokens. vLLM and SGLang each served the real model correctly across
+concurrency 1/4/16/64 (vLLM roughly 6-9% ahead of SGLang throughout);
+dispatch has no served, batched engine of its own to place in that same
+ranked table (design doc §6 amended to say so explicitly), so its
+concurrency-1 numbers are reported alongside it, labeled non-comparable.
+Full 7-point tuning of vLLM's and SGLang's own MoE tuners was not run --
+a live check found each takes ~18 minutes per token count and saves only
+after every requested count finishes, so the full matrix would have cost
+several times the phase's budget; both engines are reported at default
+configuration only, a disclosed limitation decided with the user at a
+$4.22 checkpoint, not a fudge. Six real fixes shipped mid-session, all
+recorded in the runbook: a `DeepseekForCausalLM`-to-`DeepseekV2ForCausalLM`
+config shim both tuners needed, a published `ServerArgs` SGLang's
+`fused_experts` requires, a repeatability check widened for `index_add_`'s
+non-bitwise-deterministic `atomicAdd` on CUDA, a derived end-to-end latency
+for vLLM 0.29.0's `--save-detailed` schema (which carries no such field
+directly), a subprocess `PATH`-order fix, and a self-matching `pkill`
+pattern that had been silently killing its own SSH session. Cost: **$4.5448**
+of a $10 cap, measured from RunPod's billing API rather than rate x
+duration. Full account:
+`docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`; runbook:
+`docs/runbooks/phase-6-final-benchmark.md`.
+
 ## One governing principle
 
 **Correctness before speed.** A kernel is not "fast" until it has been

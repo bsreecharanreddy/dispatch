@@ -12,6 +12,48 @@ deletes its own evidence is not a retraction.
 No phase shipped yet (`v0.1.0` is still the scaffold version; a tag lands
 once a phase's exit criteria are actually met).
 
+- **Phase 6 (final benchmark vs. vLLM and SGLang) complete**, 2026-09-20,
+  branch `phase-6-final-benchmark` (PR pending)
+  (`docs/plans/2026-09-19-phase-6-final-benchmark-plan.md`). Ran the
+  at-scale correctness gate Phase 5b flagged as owed: naive, persistent
+  and int8 all agree with the stock reference at 1,036 positions
+  (97.1-97.3% top-1 agreement, zero large-gap disagreements against a
+  pre-registered 1.0-logit threshold), superseding Phase 5a's 29-position
+  claim for these configs — `make check` green throughout (246 tests).
+  **The kernel race is a real, disclosed loss**: vLLM 0.29.0's and SGLang
+  0.5.20's own fused-MoE beat dispatch's kernels at their shipped default
+  config at nearly every tested shape, bf16 and int8 alike, on the
+  identical GPU, model, and `torch==2.13.0`/`triton==3.7.1` build every
+  contestant shared — dispatch's naive kernel wins only at int8, 128 and
+  512 tokens. vLLM and SGLang both served the real model correctly across
+  concurrency 1/4/16/64 (vLLM ~6-9% ahead of SGLang throughout, e.g.
+  1269.2 vs. 1180.4 output tok/s at concurrency 64); dispatch has no
+  served, batched engine of its own to place in that same ranked table
+  (design doc §6 amended), so its concurrency-1 numbers (naive: 21.04
+  tok/s, ~1.8x stock's 11.87, consistent with Phase 1) are reported
+  alongside it, labeled non-comparable. Full tuning of vLLM's and
+  SGLang's own MoE tuners was not run: a live check found each takes
+  ~18 minutes per token count and saves its config only after every
+  requested count finishes (confirmed by starting a real run, watching it
+  reach 29% of the first of 7 batch sizes after 5 minutes, and killing it
+  for zero usable output), so the full matrix would have cost several
+  times the phase's budget; both engines are reported at default
+  configuration only, a disclosed limitation decided with the user at a
+  $4.22 checkpoint. Six real fixes shipped mid-session: a
+  `DeepseekForCausalLM`-to-`DeepseekV2ForCausalLM` config shim both
+  tuners needed (neither recognizes the model's real V1 architecture), a
+  published `ServerArgs` SGLang's `fused_experts` requires
+  (`config namespace 'exec' not published`), a repeatability check
+  widened for `index_add_`'s non-bitwise-deterministic `atomicAdd` on
+  CUDA, a derived end-to-end latency for vLLM 0.29.0's `--save-detailed`
+  schema (which carries no per-request latency field at all), a
+  subprocess `PATH`-order fix for launching SGLang's server, and a
+  self-matching `pkill -f` pattern that had been silently killing its own
+  SSH session (fixed with the `[b]enchmark_moe.py` bracket trick). Cost:
+  **$4.5448** of a $10 cap, measured from RunPod's billing API rather
+  than rate x duration. Full account:
+  `docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`;
+  runbook: `docs/runbooks/phase-6-final-benchmark.md`.
 - **Phase 5b (speculative decoding) complete**, 2026-09-18, merged via PR #6
   (`docs/plans/2026-09-17-phase-5b-speculative-decoding-plan.md`). A shared
   propose/verify/accept/rollback loop with two drafters (a 7B draft model,
