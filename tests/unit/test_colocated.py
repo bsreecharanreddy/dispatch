@@ -93,3 +93,15 @@ def test_colocated_worker_respects_batch_size_across_prefill_and_decode() -> Non
 
     b_done = worker.step()  # "b" now gets its prefill turn, already done at max_new_tokens=1
     assert [r.request_id for r in b_done] == ["b"]
+
+
+def test_snapshot_active_tokens_reports_in_flight_generated_ids_so_far() -> None:
+    worker = ColocatedWorker(_fake_prefill_fn, _fake_decode_fn, batch_size=4)
+    worker.submit(Request("a", torch.tensor([[1, 2, 3]]), max_new_tokens=3))
+
+    worker.step()  # prefilled and decoded once: 2 of 3 tokens so far, still active
+
+    assert worker.snapshot_active_tokens() == {"a": [100, 101]}
+
+    worker.step()  # completes; no longer active
+    assert worker.snapshot_active_tokens() == {}

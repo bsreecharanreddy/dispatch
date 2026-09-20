@@ -17,16 +17,9 @@ from dispatch.serving.model_server import Responder, StubResponder, serve
 def build_responder(args: argparse.Namespace) -> Responder:
     if args.responder == "stub":
         return StubResponder()
-    # scripts/gpu/phase7_kernel_responder.py lands in Task 9 -- these two
-    # ignores are real forward references to a module that doesn't exist
-    # yet, not a permanent Any-typed boundary; Task 9 gives it a real
-    # KernelResponder return type and removes both (mypy's
-    # warn_unused_ignores will flag them as unused once it does).
-    from scripts.gpu.phase7_kernel_responder import (  # type: ignore[import-not-found]  # noqa: PLC0415
-        build_kernel_responder,
-    )
+    from scripts.gpu.phase7_kernel_responder import build_kernel_responder  # noqa: PLC0415
 
-    return build_kernel_responder(moe_kernel=args.moe_kernel)  # type: ignore[no-any-return]
+    return build_kernel_responder(moe_kernel=args.moe_kernel)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

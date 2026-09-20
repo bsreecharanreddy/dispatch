@@ -742,8 +742,24 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       can't recur even if the group-kill ever fails. Verified clean over 3
       repeated runs (no orphaned process after any of them). All 9 router
       tests (8 lib + this one) pass; `cargo fmt`/`clippy -D warnings` clean.
-
-## Next step
+- [x] Task 9, 2026-09-20: the real `KernelResponder`
+      (`scripts/gpu/phase7_kernel_responder.py`, GPU-only) -- wraps the
+      real `deepseek-ai/deepseek-moe-16b-base`, `fix_rope_inv_freq`,
+      `patch_moe_infer(resolve_backend("naive"))` (Phase 6's chosen
+      kernel), and a single-request `ColocatedWorker` into
+      `model_server.py`'s `Responder` protocol; single-flight only, per
+      the design's non-goals. Additive `ColocatedWorker.snapshot_active_tokens()`
+      (`colocated.py`) exposes in-flight (not just completed) generated
+      token ids so streaming can emit each token as it's produced. Its
+      `gpu`-marked correctness test compares the streamed output against
+      a same-session stock greedy generation, byte-exact -- matches this
+      repo's actual established correctness-gate pattern (same-session
+      stock reference) more closely than the design doc's shorthand
+      wording, which mentioned a stored Phase 6 reference file instead.
+      Confirmed the two `# type: ignore` comments Task 3 added for this
+      exact forward reference became unused once this module landed, and
+      removed both, exactly as predicted. `make check` green throughout
+      (268 tests, up from 267; the new `gpu` test skips cleanly off-GPU).
 
 Phases 3 (PR #3), 4 (PR #4), 5a (PR #5), 5b (PR #6), and 6 (PR #8) are all
 merged, each on its own branch per the one-branch-per-phase convention.

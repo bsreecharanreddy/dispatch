@@ -61,3 +61,14 @@ class ColocatedWorker:
             self._active, self._decode_fn, self._clock_fn
         )
         return already_done + completed
+
+    def snapshot_active_tokens(self) -> dict[str, list[int]]:
+        """Every currently-active request's full generated-token-id list
+        so far, keyed by request_id -- returns copies, never internal
+        references. Additive to Phase 4's step()/submit(): step()
+        already returns *completed* RequestResults; this exposes the
+        still-in-flight ones too, which Phase 7's streaming model server
+        needs to emit each token as soon as it's produced rather than
+        only at completion.
+        """
+        return {r.request_id: list(r.generated_token_ids) for r in self._active}
