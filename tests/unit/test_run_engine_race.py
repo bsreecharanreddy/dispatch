@@ -4,6 +4,7 @@ engines run in the Phase 6 pod session)."""
 
 from __future__ import annotations
 
+import fnmatch
 import json
 from pathlib import Path
 
@@ -222,6 +223,48 @@ def test_environment_records_tuned_config_provenance(
     assert environment["SGLANG_MOE_CONFIG_DIR_files"] == ["configs/triton_3_8_0/E=64,N=1408.json"]
     assert environment["VLLM_TUNED_CONFIG_FOLDER"] is None
     assert environment["VLLM_TUNED_CONFIG_FOLDER_files"] == []
+
+
+def test_merges_default_run_label_does_not_match_the_default_glob(tmp_path: Path) -> None:
+    """A second `merge` run with all defaults in the same directory must not
+    re-ingest the first merge's own output as if it were a per-engine
+    record: the default --run-label must not match the default --glob."""
+    record = {
+        "config": {"engine": "vllm", "precision": "bf16", "tuning_label": "tuned"},
+        "results": [],
+    }
+    (tmp_path / "x-race-vllm.json").write_text(json.dumps(record))
+
+    main(["merge", "--results-dir", str(tmp_path), "--output-dir", str(tmp_path)])
+
+    written = {path.name for path in tmp_path.glob("*.json")} - {"x-race-vllm.json"}
+    assert len(written) == 1
+    (summary_name,) = written
+    assert not fnmatch.fnmatch(summary_name, "*-race-*.json")
+
+
+def test_merge_refuses_a_glob_match_that_is_not_a_race_record(tmp_path: Path) -> None:
+    record = {
+        "config": {"engine": "vllm", "precision": "bf16", "tuning_label": "tuned"},
+        "results": [],
+    }
+    (tmp_path / "x-race-vllm.json").write_text(json.dumps(record))
+    # A previous merge's own summary output (a bare JSON array of rows, not a
+    # per-engine {"config", "results"} record) sitting in the same directory.
+    (tmp_path / "x-race-summary.json").write_text(json.dumps([{"engine": "vllm"}]))
+
+    with pytest.raises(SystemExit, match="does not look like a per-engine race record"):
+        main(
+            [
+                "merge",
+                "--results-dir",
+                str(tmp_path),
+                "--output-dir",
+                str(tmp_path),
+                "--run-label",
+                "s",
+            ]
+        )
 
 
 def test_merge_writes_a_json_and_a_markdown_table(tmp_path: Path) -> None:

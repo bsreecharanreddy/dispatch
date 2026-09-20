@@ -225,7 +225,11 @@ def main(argv: list[str] | None = None) -> None:
     merge.add_argument("--results-dir", type=Path, required=True)
     merge.add_argument("--glob", default="*-race-*.json")
     merge.add_argument("--output-dir", type=Path, default=Path("docs/findings/phase-6"))
-    merge.add_argument("--run-label", default=time.strftime("%Y-%m-%d-phase-6-race-summary"))
+    # Deliberately does not contain "-race-": the default --glob ("*-race-*.json")
+    # would otherwise match this command's own output on a second run in the
+    # same directory, feeding a prior summary back in as if it were a fresh
+    # per-engine record.
+    merge.add_argument("--run-label", default=time.strftime("%Y-%m-%d-phase-6-summary"))
 
     args = parser.parse_args(argv)
     if args.command == "prepare":
@@ -281,9 +285,10 @@ def _command_run(args: argparse.Namespace) -> None:
 
 
 def _command_merge(args: argparse.Namespace) -> None:
-    records = [json.loads(path.read_text()) for path in sorted(args.results_dir.glob(args.glob))]
-    if not records:
+    paths = sorted(args.results_dir.glob(args.glob))
+    if not paths:
         raise SystemExit(f"no files matching {args.glob} in {args.results_dir}")
+    records = [_load_race_record(path) for path in paths]
     rows = summarize_race(records)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / f"{args.run_label}.json").write_text(
@@ -325,6 +330,18 @@ def _load_case(
     loaded = load_file(str(inputs_dir / _case_file(num_tokens, distribution)), device=device)
     case = RaceCase(x=loaded["x"], topk_idx=loaded["topk_idx"], topk_weight=loaded["topk_weight"])
     return case, loaded["ref_bf16" if precision == "bf16" else "ref_int8"]
+
+
+def _load_race_record(path: Path) -> dict[str, Any]:
+    """A per-engine race JSON, not -- e.g. -- a previous merge's own summary
+    output, which `--glob` can otherwise match right back in."""
+    record = json.loads(path.read_text())
+    if not isinstance(record, dict) or "config" not in record or "results" not in record:
+        raise SystemExit(
+            f"{path} does not look like a per-engine race record (needs 'config' and "
+            "'results' keys) -- does --glob also match a previous merge's own output?"
+        )
+    return record
 
 
 def _installed_version(package: str) -> str | None:
