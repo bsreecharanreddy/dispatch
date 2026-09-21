@@ -7,10 +7,49 @@ Every number here is measured. Where one is later found wrong, it gets
 corrected **in place with the original kept**, because a retraction that
 deletes its own evidence is not a retraction.
 
-## Unreleased
+Every phase below has a matching git tag (`phase-0` through `phase-7`);
+`v1.0.0` marks the full 8-phase system design complete. Compare any two
+points in the project's history directly:
+[`phase-0...v1.0.0`](https://github.com/bsreecharanreddy/dispatch/compare/phase-0...v1.0.0).
 
-No phase shipped yet (`v0.1.0` is still the scaffold version; a tag lands
-once a phase's exit criteria are actually met).
+## [v1.0.0] / [phase-7] - 2026-09-21
+
+**Phase 7 (productionization) complete.** This closes the system
+design's entire 8-phase plan, Phase 0 through 7, merged to `main` via
+[#9](https://github.com/bsreecharanreddy/dispatch/pull/9)
+(`docs/plans/2026-09-20-phase-7-productionization-plan.md`). A Rust
+router (tonic gRPC client, axum HTTP, Prometheus metrics) in front of
+the existing Python model server, per ADR-0003's TGI-shaped split,
+containerized (Docker multi-stage builds), deployed to a local `kind`
+Kubernetes cluster with Prometheus/Grafana observability, demonstrated
+once against a real rented GPU over an SSH tunnel — `make check` green
+throughout (Python and the Rust router's own `fmt`/`clippy`/`test`
+gate). The one real GPU session found and fixed two real bugs neither
+anticipated by the plan: `python scripts/run_model_server.py` run
+directly can't resolve its own lazy `scripts.gpu.*` import (`sys.path[0]`
+is the script's directory, not the repo root — fixed by invoking
+`python -m scripts.run_model_server` instead), and a genuine defect in
+`deepseek-ai/deepseek-moe-16b-base`'s own shipped tokenizer — a
+byte-level BPE vocabulary (47,723 of 100,000 entries carry the
+GPT-2-style `Ġ` marker) wired to a SentencePiece `Metaspace`
+pre-tokenizer/decoder expecting a `▁` marker that appears in zero vocab
+entries, silently dropping every space in generated text. Root-caused
+and fixed for real (not a pod-local shim) with
+`fix_tokenizer_byte_level()` in `scripts/gpu/phase7_kernel_responder.py`,
+verified by round-trip token-id identity — invisible to Phases 0-6
+because they only ever compared logits/token ids, never decoded text for
+a human to read. Real demo request through the full stack (dev machine
+-> `kind` router pod -> gRPC -> SSH tunnel -> real GPU inference ->
+back): 136ms TTFT, correctly-spaced generated text, real Grafana
+metrics. Cost: **$6.8563** of a $5 cap, exceeded and disclosed
+mid-session, continued with explicit go-ahead. Full account:
+`docs/findings/phase-7/2026-09-21-phase-7-productionization-run.md`;
+runbook: `docs/runbooks/phase-7-productionization.md`.
+
+Project total, all eleven rented-GPU sessions across all nine measured
+phases (0, 1, 2, 3, 4, 5a, 5b, 6, 7): **$51.35**.
+
+## [phase-6] - 2026-09-20
 
 - **Phase 6 (final benchmark vs. vLLM and SGLang) complete**, 2026-09-20,
   merged to `main` via
@@ -61,6 +100,9 @@ once a phase's exit criteria are actually met).
   than rate x duration. Full account:
   `docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`;
   runbook: `docs/runbooks/phase-6-final-benchmark.md`.
+
+## [phase-5b] - 2026-09-18
+
 - **Phase 5b (speculative decoding) complete**, 2026-09-18, merged via PR #6
   (`docs/plans/2026-09-17-phase-5b-speculative-decoding-plan.md`). A shared
   propose/verify/accept/rollback loop with two drafters (a 7B draft model,
@@ -94,6 +136,9 @@ once a phase's exit criteria are actually met).
   and that was raised to $20 with disclosure. Also: `docs/findings/` split
   into one subfolder per phase. Full account:
   `docs/findings/phase-5b/2026-09-18-phase-5b-speculative-decoding-run.md`.
+
+## [phase-5a] - 2026-09-17
+
 - **Phase 5a (int8 weight-only quantization) complete**, 2026-09-17
   (`docs/plans/2026-09-16-phase-5a-quantization-plan.md`). Self-computed,
   per-output-channel int8 quantization extending the Triton kernel
@@ -114,6 +159,9 @@ once a phase's exit criteria are actually met).
   cap, including two RunPod Community Cloud pods that hit a real
   host-level GPU passthrough bug. Full account:
   `docs/findings/phase-5a/2026-09-17-phase-5a-quantization-run.md`.
+
+## [phase-4] - 2026-09-17
+
 - **Phase 4 (disaggregated prefill/decode) complete**, 2026-09-17
   (`docs/plans/2026-09-16-phase-4-disaggregated-prefill-decode-plan.md`).
   Continuous-batching prefill/decode workers across two real 4-GPU H100
@@ -127,6 +175,9 @@ once a phase's exit criteria are actually met).
   reported as genuinely inconclusive. Cost: **$10.94** of a $40 cap.
   Full account:
   `docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md`.
+
+## [phase-3] - 2026-09-16
+
 - **Phase 3 (multi-GPU expert-parallel serving) complete**, 2026-09-16
   (`docs/plans/2026-09-15-phase-3-multi-gpu-expert-parallel-serving-plan.md`).
   Real 2x H200 SXM expert-parallel serving over DeepSeek's own DeepEP
@@ -140,6 +191,9 @@ once a phase's exit criteria are actually met).
   median 2 max ~20, sit below Phase 1's smallest tested point of 16).
   Cost: **$13.03** of a $25 cap. Full account:
   `docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-run.md`.
+
+## [phase-2] - 2026-09-15
+
 - **Phase 2 (vLLM benchmark contribution) complete**, 2026-09-15
   (`docs/plans/2026-09-15-phase-2-vllm-benchmark-contribution-plan.md`).
   Neither vLLM's nor SGLang's official MoE benchmark modeled skewed
@@ -151,6 +205,9 @@ once a phase's exit criteria are actually met).
   Cost: **$0.77**. This phase landed no code in `dispatch` itself, only
   docs — its actual contribution is the upstreamed PR. Full account:
   `docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md`.
+
+## [phase-1] - 2026-09-15
+
 - **Phase 1 (custom Triton grouped-GEMM kernel) complete**, 2026-09-15
   (`docs/plans/2026-09-15-phase-1-grouped-gemm-plan.md`). Built and
   tested: a CPU-only MoE reference and grouped-GEMM contract, a naive and
@@ -180,6 +237,9 @@ once a phase's exit criteria are actually met).
     512-2048 — a workload-specific result recorded rather than buried.
     Total GPU cost across both sessions: **$0.65**.
     Full account: `docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md`.
+
+## [phase-0] - 2026-09-14
+
 - **Phase 0 (baseline) complete**, 2026-09-14
   (`docs/plans/2026-09-14-phase-0-baseline-plan.md`). Built and tested: a
   RunPod REST client and provisioning CLI, a token-by-token-timed
