@@ -33,7 +33,7 @@ piece neither of them touches.
 **`docs/design/2026-09-14-dispatch-system-design.md`** is the authoritative
 architecture doc — model choice (deepseek-ai/deepseek-moe-16b-base), what's
 custom vs. reused, kernel scope, the multi-GPU/DeepEP plan and its real
-NVLink hardware constraint, benchmark methodology, the 7-phase plan, cost
+NVLink hardware constraint, benchmark methodology, the 8-phase plan, cost
 plan, and explicit scope boundaries. Read it before making any structural
 decision. `docs/adr/` carries the specific "why this over that" calls made
 along the way (0001: grouped-GEMM over another attention-kernel
@@ -208,6 +208,43 @@ of a $10 cap, measured from RunPod's billing API rather than rate x
 duration. Full account:
 `docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`; runbook:
 `docs/runbooks/phase-6-final-benchmark.md`.
+
+**Phase 7 (productionization) is complete, 2026-09-21**, on branch
+`phase-7-productionization`, PR not yet opened. **This closes the system
+design's entire 8-phase plan, Phase 0 through 7.** A Rust router (tonic
+gRPC client, axum HTTP, Prometheus metrics) in front of the existing
+Python model server, per ADR-0003's TGI-shaped split, containerized
+(Docker multi-stage builds), deployed to a local `kind` Kubernetes
+cluster with Prometheus/Grafana observability, demonstrated once against
+a real rented GPU over an SSH tunnel. The one real GPU session found and
+fixed two real bugs neither anticipated by the plan: `python
+scripts/run_model_server.py` run directly can't resolve its own lazy
+`scripts.gpu.*` import (`sys.path[0]` is the script's directory, not the
+repo root -- fixed by invoking `python -m scripts.run_model_server`
+instead), and a genuine defect in `deepseek-ai/deepseek-moe-16b-base`'s
+own shipped tokenizer -- a byte-level BPE vocabulary (47,723 of 100,000
+entries carry the GPT-2-style `Ġ` marker) wired to a SentencePiece
+`Metaspace` pre-tokenizer/decoder expecting a `▁` marker that appears in
+zero vocab entries, silently dropping every space in generated text.
+Root-caused and fixed for real (not a pod-local shim) with
+`fix_tokenizer_byte_level()` in `scripts/gpu/phase7_kernel_responder.py`,
+verified by round-trip token-id identity -- invisible to Phases 0-6
+because they only ever compared logits/token ids, never decoded text for
+a human to read. The gpu-marked correctness test needed a second run with
+bytecode caching disabled after a checksum-identical file reproduced its
+pre-fix failure, traced to stale `.pyc` bytecode on the pod's
+network-mounted `/workspace`. Real demo request through the full stack
+(dev machine -> `kind` router pod -> gRPC -> SSH tunnel -> real GPU
+inference -> back): 136ms TTFT, correctly-spaced generated text, real
+Grafana metrics. Cost: **$6.8563** of a **$5 cap**, exceeded and disclosed
+mid-session (mostly real debugging time: two long correctness-test runs
+plus live tokenizer diagnosis), continued with the user's explicit
+go-ahead rather than stopped early. PII (the presenter's local
+username/hostname) found in the screen recording and RunPod console
+screenshots was redacted, frame-by-frame verified, before publishing.
+Full account:
+`docs/findings/phase-7/2026-09-21-phase-7-productionization-run.md`;
+runbook: `docs/runbooks/phase-7-productionization.md`.
 
 ## One governing principle
 

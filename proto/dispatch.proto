@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package dispatch.v1;
+
+// The gRPC contract between the Rust router and the Python model server
+// (docs/design/2026-09-20-phase-7-productionization.md SS3-4). Compiled
+// by both sides -- tonic-build/prost-build (Rust, router/build.rs) and
+// grpcio-tools (Python, scripts/gen_proto.py) -- each vendors its own
+// protoc, so no system protoc install is required.
+service ModelServer {
+  // Streams generated text token-by-token. The final message in the
+  // stream always has is_final=true and empty text; every message
+  // before it has is_final=false and carries exactly one token's text.
+  rpc Generate(GenerateRequest) returns (stream GenerateResponse);
+}
+
+message GenerateRequest {
+  string request_id = 1;
+  string prompt = 2;
+  uint32 max_new_tokens = 3;
+}
+
+message GenerateResponse {
+  string request_id = 1;
+  string text = 2;
+  bool is_final = 3;
+  double t_emit_unix = 4;
+}

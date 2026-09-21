@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: router-config
+  namespace: dispatch-demo
+data:
+  MODEL_SERVER_ENDPOINT: "http://model-server.dispatch-demo.svc.cluster.local:50051"
+  ROUTER_LISTEN_ADDR: "0.0.0.0:8080"
+  ROUTER_QUEUE_CAPACITY: "1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: router
+  namespace: dispatch-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dispatch-router
+  template:
+    metadata:
+      labels:
+        app: dispatch-router
+    spec:
+      containers:
+        - name: router
+          image: dispatch-router:demo
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: router-config
+          # main.rs retries connecting to the model server for up to 30s
+          # (30 attempts x 1s) before giving up -- these probes must
+          # tolerate that whole window, not just a quick local startup.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 8
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 8
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: router
+  namespace: dispatch-demo
+spec:
+  selector:
+    app: dispatch-router
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

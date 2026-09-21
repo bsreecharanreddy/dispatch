@@ -31,10 +31,12 @@ result was a null or a mixed one, it's reported that way.
 > [#6](https://github.com/bsreecharanreddy/dispatch/pull/6) Phase 5b,
 > [#8](https://github.com/bsreecharanreddy/dispatch/pull/8) Phase 6) —
 > Phase 2 landed as docs only, its actual contribution being the
-> upstreamed vLLM PR below, not a dispatch-repo code change. **Phase 6
-> (final benchmark vs. vLLM/SGLang) is complete and merged.** This closes
-> the system design's full phase plan (0-6); only Phase 7
-> (productionization) remains. Full
+> upstreamed vLLM PR below, not a dispatch-repo code change. **Phase 7
+> (productionization) is complete**, PR pending: a real Rust router in
+> front of the Python model server, containerized, deployed to a local
+> Kubernetes cluster, demonstrated once against a real rented GPU over an
+> SSH tunnel — see [below](#phase-7-seeing-it-run). **This closes the
+> system design's entire phase plan, Phase 0 through 7.** Full
 > task-by-task record: [`docs/STATUS.md`](docs/STATUS.md). Design and
 > phasing:
 > [`docs/design/2026-09-14-dispatch-system-design.md`](docs/design/2026-09-14-dispatch-system-design.md).
@@ -52,9 +54,10 @@ the answer was a null or mixed result.
 serving path, an upstreamed open-source benchmark contribution, every
 rented-GPU session, and the write-ups of what broke along the way.
 
-**Measured across ten rented-GPU sessions (eight phases), $44.49 total,
-every phase within its stated cap except Phase 5b, whose original $10 cap
-was exceeded on one pod and raised to $20 with disclosure:** a custom Triton kernel **~65-73% faster** than DeepSeek's own
+**Measured across eleven rented-GPU sessions (nine phases), $51.35 total,
+every phase within its stated cap except Phase 5b (its original $10 cap
+was exceeded on one pod and raised to $20 with disclosure) and Phase 7
+(its $5 cap was exceeded to $6.8563, disclosed mid-session):** a custom Triton kernel **~65-73% faster** than DeepSeek's own
 stock MoE forward pass at perfect logit agreement (Phase 1); an opt-in
 skewed-load benchmark flag upstreamed to vLLM, changing which kernel config
 its own tuner picks at 4 of 5 tested batch sizes (Phase 2); a real 2-GPU
@@ -77,7 +80,13 @@ its shipped default config on nearly every tested shape**, in both bf16
 and int8, on the same GPU, same model, same Triton compiler as every
 contestant, with the at-scale correctness gate this project owed since
 Phase 5a finally measured (97.1-97.3% top-1 agreement at 1,036 positions,
-zero large-gap disagreements) (Phase 6).
+zero large-gap disagreements) (Phase 6); and a real Rust router serving
+real GPU-backed generations through a local Kubernetes cluster over an
+SSH tunnel, where diagnosing why the very first demo request came back
+with no spaces between words led to a genuine third-party tokenizer
+defect — the model's shipped vocabulary is byte-level BPE but wired to
+the wrong pre-tokenizer/decoder pair — found, root-caused, and fixed
+(Phase 7).
 
 **262 tests, `make check` green throughout Phase 6** (lint, `mypy --strict`,
 and the full non-GPU suite) — GPU-dependent tests are marked and excluded
@@ -160,8 +169,8 @@ flowchart LR
 The differentiated work is the grouped-GEMM kernel and the serving system
 around it. Phases 0-6 drive the kernel and model directly from lightweight
 Python test/benchmark harnesses; the Rust-router/Python-model-server split
-is Phase 7's contribution, once there's a real service worth
-productionizing.
+is Phase 7's contribution, built and demonstrated once the kernel and
+serving work behind it were proven.
 
 ## What has been measured
 
@@ -178,10 +187,30 @@ including the ones that came back null or mixed:
 | **5a — int8 quantization** | Does a self-computed, per-channel int8 weight-only kernel cut memory with no model-level correctness cost? | **Yes on both counts, no speedup.** **49.89%** expert-weight memory reduction, perfect top-1/mutual-top-k agreement vs. the naive bf16 kernel at every tested position (29 positions, one run -- a small sample; see 5b for the near-tie sensitivity it could not rule out). Throughput was a near-exact tie with naive (**-1.2%**), as expected — weight-only quantization saves memory bandwidth, not FLOPs. A real bug (quantizing without freeing the original bf16 weights, OOMing a 44GB L40) was found and fixed mid-session |
 | **5b — speculative decoding** | Does speculative decoding (a 7B draft model, or model-free prompt-lookup) speed up single-request decode on the int8 target while reproducing plain greedy output exactly? | **Partly, and not exactly.** A40, bf16, unbatched, baseline **25.18 tok/s**: only prompt-lookup beats it (**34.4-50.9 tok/s** across k=1-8, +77.7% at k=4); the 7B draft model is *below* baseline at every k (19.6-23.0) despite 2-7x higher acceptance. Output matched plain greedy in 13 of 16 (prompt, k) combinations for draft-model and 9 of 16 for prompt-lookup; the same k=4 config matched 2/4 prompts in one process and 3/4 in another. Root-caused to near-tied logits under the int8 kernel's floating-point precision, not a logic bug. The first session's numbers were withdrawn by this project's own review (degenerate baseline) and root-caused to a `transformers` bug leaving DeepSeek's RoPE buffers uninitialized |
 | **6 — final benchmark** | On the same L40, same model, same Triton compiler, how does dispatch's kernel compare with vLLM's and SGLang's own fused-MoE, at default and at scale, and does the correctness claim hold past a 29-position sample? | **vLLM's default config beats dispatch at every one of the 28 measured shapes**, bf16 and int8 alike -- the gap narrows from 2.4-4.1x slower at 1 token to ~1.1-1.3x slower at 128 tokens and up, but never closes (dispatch does beat SGLang specifically at 128/512 tokens, just not vLLM). The at-scale gate passed for every kernel: **97.1-97.3% top-1 agreement at 1,036 positions, zero large-gap disagreements** against a pre-registered 1.0-logit threshold — replacing Phase 5a's 29-position claim. vLLM and SGLang both served the real model correctly across concurrency 1-64 (vLLM ~6-9% ahead of SGLang throughout); dispatch's own harness has no served, batched engine to place in that same table. vLLM's and SGLang's own tuners were not run to completion (~18 min/token-count, all-or-nothing per run — confirmed live, not assumed) — both shown at default config only, disclosed rather than glossed over |
+| **7 — productionization** | Can the kernel and serving work from Phases 0-6 stand behind a real router, containerized and deployed to Kubernetes, serving one real request against a rented GPU end to end? | **Yes**, with two real bugs found and fixed along the way: a `sys.path` footgun in the model-server entrypoint, and a genuine defect in the model's own shipped tokenizer (a byte-level BPE vocabulary wired to a SentencePiece-style pre-tokenizer/decoder expecting the wrong marker character) that silently dropped every space in generated text until root-caused and fixed. Real demo request through router → gRPC → SSH tunnel → GPU: **136ms TTFT**, correctly-spaced generated text, real Prometheus/Grafana metrics. Cost **$6.8563** against a $5 cap, exceeded and disclosed |
 
 Full method and every number: one folder per phase in
-[`docs/findings/`](docs/findings/) (`phase-0/` through `phase-6/`), each
+[`docs/findings/`](docs/findings/) (`phase-0/` through `phase-7/`), each
 with a run doc and a cost doc.
+
+## Phase 7: seeing it run
+
+A recorded demo instead of a standing public endpoint — a real GPU-backed
+service running continuously costs roughly $500-600/month, which this
+project's own cost-discipline rules rule out for a demo. Everything below
+is from the one real session: `curl` against the router, gRPC to a
+GPU-backed model server over an SSH tunnel, real generated text, real
+Grafana metrics.
+
+![Grafana dashboard showing real request counts, queue depth, and time-to-first-token from the Phase 7 demo](docs/findings/phase-7/2026-09-21-phase-7-grafana-dashboard.png)
+
+![Terminal showing the real curl request through the router and its real, correctly-spaced generated response](docs/findings/phase-7/2026-09-21-phase-7-terminal-demo.png)
+
+[Screen recording](docs/findings/phase-7/2026-09-21-phase-7-demo-recording.mp4)
+of the live request and the dashboard updating (presenter's local
+username/hostname redacted before publishing). Full account, including
+the two bugs found and fixed live:
+[`docs/findings/phase-7/2026-09-21-phase-7-productionization-run.md`](docs/findings/phase-7/2026-09-21-phase-7-productionization-run.md).
 
 ## What it does not do
 
@@ -211,7 +240,9 @@ doc's own scope boundaries:
 | Multi-GPU | DeepSeek's DeepEP — real all-to-all expert-parallel dispatch/combine over NVLink/SXM |
 | Serving | Continuous-batching prefill/decode workers, both co-located and disaggregated topologies; speculative decoding (draft-model and prompt-lookup drafters, Phase 5b) |
 | Benchmark methodology | Measured head-to-head against real vLLM 0.29.0 and SGLang 0.5.20, same GPU, same model, same Triton compiler (Phase 6) — TTFT, inter-token latency, tokens/sec, cost per million tokens |
-| Language | Python 3.12+ — `uv`, `ruff`, `mypy --strict`, `pytest` |
+| Serving front door | Rust router (`tonic` gRPC client, `axum` HTTP, Prometheus metrics) in front of the Python model server, per ADR-0003 (Phase 7) |
+| Deployment | Docker (multi-stage builds), Kubernetes (`kind` locally), Prometheus + Grafana observability (Phase 7) |
+| Language | Python 3.12+ — `uv`, `ruff`, `mypy --strict`, `pytest`; Rust 2024 edition — `cargo fmt`, `cargo clippy`, `cargo test` |
 | GPU provisioning | RunPod's API via lightweight scripts (`scripts/gpu/`) — not Terraform; see `CLAUDE.md`'s cost discipline |
 | CI | GitHub Actions — lint, `mypy --strict`, and the non-GPU suite on every push |
 
@@ -222,19 +253,25 @@ src/dispatch/
   benchmark/        metrics, generation harness, reference-logit capture/comparison
   kernels/          reference MoE, Triton grouped-GEMM (naive + persistent), int8 quantization,
                     expert-parallel sharding, backend registry
-  serving/          KV-cache slice/handoff, continuous-batching prefill/decode, co-located worker
+  serving/          KV-cache slice/handoff, continuous-batching prefill/decode, co-located worker,
+                    model_server.py (gRPC service wrapping the Responder protocol)
   speculative/      Drafter protocol (draft-model, prompt-lookup), shared verify/rollback loop,
                     independent plain-greedy oracle, exact generated-token comparison
+router/             Rust: tonic gRPC client, axum HTTP surface, Prometheus metrics (Phase 7)
+docker/              router.Dockerfile, model-server.Dockerfile (Phase 7)
+k8s/                 namespace/deployment/service manifests, Prometheus + Grafana (Phase 7)
 scripts/
   run_baseline.py       latency/throughput CLI, stock or kernel-patched, --compare-reference gate
   run_speculative_bench.py  speculative-decoding CLI, --compare-generated-tokens checks exact output
   run_kernel_bench.py   pure kernel micro-benchmark, refuses to time a backend that disagrees
+  run_model_server.py   Phase 7's gRPC model-server CLI (stub or real-kernel responder)
+  run_kind_demo.sh      brings up the local kind cluster + router + observability stack (Phase 7)
   gpu/                  RunPod API client, provisioning CLI, pod-live correctness/concurrency scripts
 tests/              unit + integration; `gpu`-marked tests need real CUDA, excluded from CI
 docs/design/        the authoritative architecture, phase plan, and scope document
 docs/adr/           decisions, each checked against real current material before being made
 docs/plans/         per-phase implementation plans, written before any code
-docs/findings/      measured results and costs — one subfolder per phase (phase-0 ... phase-5b)
+docs/findings/      measured results and costs — one subfolder per phase (phase-0 ... phase-7)
 docs/runbooks/      the exact GPU-session steps each phase's real run followed
 ```
 

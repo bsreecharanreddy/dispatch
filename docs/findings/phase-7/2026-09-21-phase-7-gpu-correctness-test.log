@@ -1,0 +1,28 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /workspace/dispatch/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/dispatch
+configfile: pyproject.toml
+plugins: anyio-4.15.1, cov-7.1.0
+collecting ... collected 1 item
+
+tests/unit/test_phase7_kernel_responder.py::test_kernel_responder_matches_same_session_stock_greedy_text PASSED [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/_pytest/config/__init__.py:1345
+  /workspace/dispatch/.venv/lib/python3.12/site-packages/_pytest/config/__init__.py:1345: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; anyio
+    self._mark_plugins_for_rewrite(hook, disable_autoload)
+
+tests/unit/test_phase7_kernel_responder.py::test_kernel_responder_matches_same_session_stock_greedy_text
+tests/unit/test_phase7_kernel_responder.py::test_kernel_responder_matches_same_session_stock_greedy_text
+  /workspace/dispatch/.venv/lib/python3.12/site-packages/transformers/modeling_attn_mask_utils.py:71: FutureWarning: The attention mask API under `transformers.modeling_attn_mask_utils` (`AttentionMaskConverter`) is deprecated and will be removed in Transformers v5.10. Please use the new API in `transformers.masking_utils`.
+    warnings.warn(DEPRECATION_MESSAGE, FutureWarning)
+
+tests/unit/test_phase7_kernel_responder.py::test_kernel_responder_matches_same_session_stock_greedy_text
+tests/unit/test_phase7_kernel_responder.py::test_kernel_responder_matches_same_session_stock_greedy_text
+  /workspace/dispatch/.venv/lib/python3.12/site-packages/transformers/modeling_attn_mask_utils.py:281: FutureWarning: The attention mask API under `transformers.modeling_attn_mask_utils` (`AttentionMaskConverter`) is deprecated and will be removed in Transformers v5.10. Please use the new API in `transformers.masking_utils`.
+    warnings.warn(DEPRECATION_MESSAGE, FutureWarning)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 1 passed, 5 warnings in 1422.60s (0:23:42) ==================
+GPUTEST_EXIT_CODE=0

@@ -649,18 +649,239 @@ disclosed limitation, not a fudge. Total cost: **\$4.5448 of the \$10 cap**
 `docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`; runbook:
 `docs/runbooks/phase-6-final-benchmark.md`.
 
+## Phase 7 progress
+
+Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
+`docs/plans/2026-09-20-phase-7-productionization-plan.md`, 14 tasks. Branch
+`phase-7-productionization` (worktree).
+
+- [x] Task 1, 2026-09-20: `kind` installed (v0.33.0). Connectivity spike on
+      this machine (macOS, Docker Desktop): a pod inside a throwaway `kind`
+      cluster reached a plain `python3 -m http.server` listener on the dev
+      machine via `host.docker.internal:<port>` on the first try -- no
+      fallback host-gateway config needed. This is the hostname
+      `k8s/model-server-external.yaml` (Task 11) hardcodes for the
+      `ExternalName` Service the router uses to reach the (later,
+      SSH-tunneled) model server.
+- [x] Task 2, 2026-09-20: shared `proto/dispatch.proto` and the Rust router
+      crate scaffold (`router/`), Rust 1.98.1 installed via rustup. One real
+      plan correction found live: `tonic_build::compile_protos` (the plan's
+      originally-written `build.rs` call) does not exist in tonic 0.14 --
+      that release split prost integration out of `tonic-build` into two
+      new crates, `tonic-prost-build` (build-time codegen) and `tonic-prost`
+      (the runtime `ProstCodec` the generated code references). Fixed by
+      switching to `tonic_prost_build::compile_protos` and adding
+      `tonic-prost` as a normal dependency; confirmed by reading
+      tonic-build 0.14.6's actual source after the original call failed to
+      compile, not guessed. `tonic::async_trait` (planned for later tasks'
+      mock gRPC servers) is unaffected -- still re-exported at tonic's
+      crate root, confirmed the same way.
+- [x] Task 3, 2026-09-20: Python side of the contract --
+      `dispatch.serving.model_server` (`Responder` protocol, `StubResponder`,
+      `ModelServerServicer`, `serve`) and `scripts/run_model_server.py`.
+      `make check` green (267 tests, up from 262; lint and `mypy --strict`
+      clean), but getting there needed three real mypy fixes beyond the
+      plan's own code: (1) `--python_out` alone generates message classes
+      via runtime reflection, invisible to mypy without the matching
+      `--pyi_out` stub, now part of `scripts/gen_proto.py`; (2) the plan's
+      `ignore_errors = true` override for `dispatch.proto.*` only suppresses
+      errors *inside* that module, not "call to untyped function" errors at
+      its *importers* -- switched to `ignore_missing_imports` +
+      `follow_imports = "skip"`, the same pattern already used for
+      triton/deep_ep/vllm/sglang; (3) that per-module override only applies
+      when a module is *imported*, not when mypy walks `src` and hits it
+      directly as a root target, so the two generated files also needed an
+      explicit `[tool.mypy] exclude` pattern. All three confirmed by reading
+      mypy's actual error output and its own documented `follow_imports`
+      semantics, not guessed. Two intentional forward references to Task 9's
+      not-yet-existing `scripts/gpu/phase7_kernel_responder.py` are marked
+      with `# type: ignore` comments Task 9 is expected to remove (mypy's
+      `warn_unused_ignores` will flag them once that module exists and is
+      typed).
+- [x] Task 4, 2026-09-20: router admission queue (`router/src/queue.rs`) --
+      a capacity-1 `tokio::sync::Semaphore` plus an `AtomicUsize` waiting
+      counter for the `queue_depth` gauge Task 5 wires up. `cargo test`,
+      `cargo fmt`, `cargo clippy -D warnings` all clean.
+- [x] Task 5, 2026-09-20: router Prometheus metrics (`router/src/metrics.rs`)
+      -- `RouterMetrics` registers `dispatch_router_requests_total`,
+      `..._ttft_seconds`, `..._inter_token_latency_seconds`,
+      `..._queue_depth` on its own `Registry`, with `.encode()` for the
+      `/metrics` HTTP handler Task 7 adds. `cargo test`/`fmt`/`clippy` clean.
+- [x] Task 6, 2026-09-20: router gRPC client (`router/src/client.rs`) and a
+      test-only mock `ModelServer` (`router/src/test_support.rs`, gated
+      `#[cfg(test)]`). `ModelServerClient::generate` records TTFT and
+      inter-token-latency into `RouterMetrics` as it streams. The one thing
+      Task 2 flagged as uncertain -- whether `#[tonic::async_trait]` still
+      matches tonic 0.14's generated `ModelServer` trait after the
+      tonic-prost-build split -- compiled and passed on the first try, no
+      further correction needed. `cargo test`/`fmt`/`clippy` clean.
+- [x] Task 7, 2026-09-20: router HTTP surface (`router/src/app.rs`:
+      `/generate`, `/healthz`, `/readyz`, `/metrics`) and `main.rs` wiring
+      (env-configured: `MODEL_SERVER_ENDPOINT`, `ROUTER_LISTEN_ADDR`,
+      `ROUTER_QUEUE_CAPACITY`). All 3 tests passed on the first try.
+      Manually smoke-tested end to end (stub model server + real router
+      binary, both running): `POST /generate` returned real streamed text
+      and timing, `/metrics` showed real recorded TTFT/inter-token-latency/
+      queue-depth/requests-total values. `cargo test`/`fmt`/`clippy` clean.
+- [x] Task 8, 2026-09-20: cross-language router integration test
+      (`router/tests/cross_language_integration.rs`) -- spawns the real
+      `scripts/run_model_server.py --responder stub` as a subprocess and
+      drives it through the real router over real gRPC. Found and fixed a
+      real process-lifecycle bug while getting it stable: the spawned
+      `uv run python ...` forks rather than exec'ing on this machine, so
+      killing only the immediate child (the `uv` process) left the actual
+      model server running, orphaned and reparented to `launchd`, still
+      listening on the test's port after the test had already passed --
+      confirmed live (`ps` showed `PPID=1`) after a manually
+      `tail`-piped run hung for 27+ minutes because the orphan also held
+      an inherited stderr fd the pipe was waiting on for EOF. Fixed by
+      putting the child in its own process group
+      (`std::os::unix::process::CommandExt::process_group(0)`) and killing
+      the negative-pid group in `Drop`, plus switching `stderr` from
+      `Stdio::inherit()` to `Stdio::piped()` so the fd-inheritance hole
+      can't recur even if the group-kill ever fails. Verified clean over 3
+      repeated runs (no orphaned process after any of them). All 9 router
+      tests (8 lib + this one) pass; `cargo fmt`/`clippy -D warnings` clean.
+- [x] Task 9, 2026-09-20: the real `KernelResponder`
+      (`scripts/gpu/phase7_kernel_responder.py`, GPU-only) -- wraps the
+      real `deepseek-ai/deepseek-moe-16b-base`, `fix_rope_inv_freq`,
+      `patch_moe_infer(resolve_backend("naive"))` (Phase 6's chosen
+      kernel), and a single-request `ColocatedWorker` into
+      `model_server.py`'s `Responder` protocol; single-flight only, per
+      the design's non-goals. Additive `ColocatedWorker.snapshot_active_tokens()`
+      (`colocated.py`) exposes in-flight (not just completed) generated
+      token ids so streaming can emit each token as it's produced. Its
+      `gpu`-marked correctness test compares the streamed output against
+      a same-session stock greedy generation, byte-exact -- matches this
+      repo's actual established correctness-gate pattern (same-session
+      stock reference) more closely than the design doc's shorthand
+      wording, which mentioned a stored Phase 6 reference file instead.
+      Confirmed the two `# type: ignore` comments Task 3 added for this
+      exact forward reference became unused once this module landed, and
+      removed both, exactly as predicted. `make check` green throughout
+      (268 tests, up from 267; the new `gpu` test skips cleanly off-GPU).
+- [x] Task 10, 2026-09-20: `docker/router.Dockerfile`,
+      `docker/model-server.Dockerfile`, `docker-compose.yml` -- both images
+      build and the full stack works end to end, but not on the first
+      attempt. Three real bugs found and fixed against the actual built
+      images, none visible from reading the Dockerfiles alone: (1)
+      `pyproject.toml` declares `readme = "README.md"`, which `uv sync`'s
+      build step needs but the model-server Dockerfile never copied in --
+      `uv sync` failed outright; (2) the generated `dispatch_pb2.py`
+      imports `google.protobuf` directly at runtime, previously available
+      only transitively via the dev-only `grpcio-tools` -- a `--no-dev`
+      image had `grpcio` but not `protobuf`, `ModuleNotFoundError` on
+      startup; added `protobuf>=7.36.2` (the version already resolved in
+      `uv.lock`) as an explicit runtime dependency; (3) `uv run` (no
+      `--no-dev`) re-syncs and reinstalls dev tools (mypy, ruff, pytest)
+      into the container on every start despite the image being built
+      with `--no-dev` -- switched the entrypoint to `uv run --no-dev`.
+      A fourth issue surfaced once the first three were fixed and the
+      stack actually ran: the router's one-shot startup connect raced the
+      model server's own startup and exited immediately on the first
+      failure (`depends_on` only waits for the container to start, not
+      for the app inside it to be ready) -- fixed with a bounded 30x1s
+      retry loop in `main.rs` (`connect_with_retry`), plus
+      `restart: on-failure` on the compose service as defense in depth.
+      Verified: `POST /generate` through the containerized router and
+      model server returned real streamed text and timing, `/metrics`
+      showed real recorded values, matching the earlier bare-binary smoke
+      test from Task 7. `make check` green throughout (Rust: `cargo
+      test`/`fmt`/`clippy` all clean, 9 tests; Python: 268 tests, `mypy
+      --strict` and `ruff` clean).
+- [x] Task 11, 2026-09-20: K8s manifests (`k8s/namespace.yaml`,
+      `router-deployment.yaml`, `model-server-external.yaml`,
+      `prometheus.yaml`, `grafana.yaml`) and `scripts/run_kind_demo.sh`,
+      fully rehearsed end to end against the stub responder (no GPU):
+      `kind create cluster` -> build and `kind load` both images -> apply
+      manifests -> both rollouts succeed -> port-forward -> a real
+      `POST /generate` through the router pod, the `ExternalName` Service,
+      and `host.docker.internal` (Task 1's verified finding) reached the
+      locally-running stub server and returned real generated text ->
+      Prometheus's own API confirmed it was actually scraping the
+      router's real `dispatch_router_requests_total` (value 1, matching
+      the one request fired) -> Grafana's `/api/health` responded ->
+      `kind delete cluster` torn down cleanly, no orphaned processes.
+      One deviation from the plan's own snippet, applied before the
+      rehearsal rather than found by it: the router's Task 10 startup
+      retry loop can take up to 30s, so the router Deployment's liveness/
+      readiness probes needed `periodSeconds`/`failureThreshold` past
+      the plan's original `initialDelaySeconds: 2` alone, or K8s would
+      restart the pod mid-retry; set to tolerate the full 30s window.
+      Confirmed live: the rehearsal's rollout succeeded on the first try
+      with the wider probes. `ExternalName`'s pure-DNS semantics (no
+      port remapping) mean this same manifest set, unmodified, is what
+      Task 13 points at the real SSH tunnel instead of the local stub.
+- [x] Task 12, 2026-09-20: `make check`/`make check-fast` are Rust-aware
+      (`router-lint`: `cargo fmt --check` + `cargo clippy -D warnings`;
+      `router-test`: `cargo test`) -- "green before push" is one command
+      covering both languages again. Ran `make check` for real: all 5
+      steps pass (268 Python tests, 9 Rust tests).
+- [x] Task 13, 2026-09-21: the one real paid GPU session. Pod
+      `maljfft9qy5iaa`, RunPod Secure Cloud, NVIDIA A40 ($0.49/hr, the
+      quoted L40 sold out during pod creation). The gpu-marked
+      correctness test (`test_kernel_responder_matches_same_session_stock_greedy_text`)
+      passed -- but only after a second run with `__pycache__` cleared
+      and `python -B`, tracing a same-checksum re-run's identical
+      failure to stale bytecode on the pod's network-mounted
+      `/workspace`. Two real bugs found and fixed live, neither in code
+      any earlier task had exercised: `python scripts/run_model_server.py`
+      run directly can't resolve the lazy `scripts.gpu.*` import
+      (`sys.path[0]` is the script's own directory, not the repo root --
+      fixed by invoking `python -m scripts.run_model_server` instead, a
+      runbook-level fix); and the model's own shipped `tokenizer.json`
+      is a byte-level BPE vocabulary (47,723 of 100,000 entries carry
+      the GPT-2-style `Ġ` marker) wired to a SentencePiece `Metaspace`
+      pre-tokenizer/decoder expecting a `▁` marker that appears in zero
+      vocab entries -- encode() silently dropped every word boundary,
+      decode() produced glued-together or literal-`Ġ`-leaking text.
+      Fixed for real (not a pod-local shim) with
+      `fix_tokenizer_byte_level()` in
+      `scripts/gpu/phase7_kernel_responder.py`, verified by round-trip
+      token-id identity. The real demo then worked end to end: the SSH
+      tunnel, `scripts/run_kind_demo.sh` (unmodified from Task 11's
+      stub rehearsal), a real `POST /generate` returning real generated
+      text and real `ttft_ms`/`inter_token_latencies_ms`, a Grafana
+      screenshot and screen recording captured as evidence (PII
+      redacted before publishing, at the user's request -- terminal
+      username/hostname in the prompt and title bar on every visible
+      line, plus one app-switcher tooltip flash, all found by
+      frame-by-frame review of the raw recording). Cost: **$6.8563**
+      (RunPod's billing API) against a **$5 cap**, exceeded and
+      disclosed mid-session -- see the findings doc for why. Pod
+      terminated and verified gone. Full account:
+      `docs/findings/phase-7/2026-09-21-phase-7-productionization-run.md`;
+      runbook: `docs/runbooks/phase-7-productionization.md`.
+- [x] Task 14, 2026-09-21: findings doc, runbook, this STATUS entry,
+      README and CLAUDE.md refreshed with Phase 7's summary, final
+      `make check` green.
+
+**Phase 7 is complete.** The system design's 8-phase plan (SS7) is now
+fully executed, Phase 0 through 7 -- the productionization phase closes
+the gap Phase 7's own design doc was added to fill (a real serving path,
+not just kernels and benchmarks): a Rust router (tonic gRPC, axum HTTP,
+Prometheus metrics) in front of the existing Python model server per
+ADR-0003, containerized, deployed to a local `kind` Kubernetes cluster,
+observed with Prometheus/Grafana, demonstrated once against a real rented
+GPU over an SSH tunnel -- with two real bugs (one a `sys.path` footgun,
+one a genuine third-party tokenizer defect traced to its exact missing
+vocabulary data) found and fixed along the way, exactly the kind of
+real-hardware surprise every prior phase's paid session also turned up.
+
 ## Next step
 
 Phases 3 (PR #3), 4 (PR #4), 5a (PR #5), 5b (PR #6), and 6 (PR #8) are all
 merged, each on its own branch per the one-branch-per-phase convention.
+Phase 7 is complete on branch `phase-7-productionization` (see "Phase 7
+progress"), PR not yet opened -- the next action is asking the user for
+push/PR approval, per this repo's standing convention, then opening it.
 
-**Phase 6 merged to `main` via PR #8, 2026-09-20** (design, plan, all 15
-tasks, findings, runbook, a whole-branch review that found and fixed 20
-real issues, and a corrected headline result -- see "Phase 6 progress").
-Branch `phase-6-final-benchmark` deleted post-merge. The system design's
-phase table (§7) is now fully executed, Phase 0 through 6; Phase 7
-(productionization: Rust router, Docker, K8s demoed once) is the only
-phase left unstarted.
+**The system design's phase table (§7) is now fully executed, Phase 0
+through 7.** There is no next phase; `dispatch`'s implementation work
+against the original design doc is done. Any further work is
+maintenance, responding to Phase 2's open upstream PR review, or a
+deliberately new scope decided the same way every phase here started --
+brainstormed and written down before any code.
 
 Phase 2's PR is still open and awaiting maintainer review; no further work
 planned on it beyond responding to review feedback.
