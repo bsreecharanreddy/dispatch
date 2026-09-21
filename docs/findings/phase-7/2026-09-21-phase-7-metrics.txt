@@ -1,0 +1,38 @@
+# HELP dispatch_router_inter_token_latency_seconds Gap between consecutive tokens, seconds
+# TYPE dispatch_router_inter_token_latency_seconds histogram
+dispatch_router_inter_token_latency_seconds_bucket{le="0.005"} 7
+dispatch_router_inter_token_latency_seconds_bucket{le="0.01"} 7
+dispatch_router_inter_token_latency_seconds_bucket{le="0.025"} 7
+dispatch_router_inter_token_latency_seconds_bucket{le="0.05"} 81
+dispatch_router_inter_token_latency_seconds_bucket{le="0.1"} 118
+dispatch_router_inter_token_latency_seconds_bucket{le="0.25"} 118
+dispatch_router_inter_token_latency_seconds_bucket{le="0.5"} 118
+dispatch_router_inter_token_latency_seconds_bucket{le="1"} 118
+dispatch_router_inter_token_latency_seconds_bucket{le="2.5"} 118
+dispatch_router_inter_token_latency_seconds_bucket{le="5"} 118
+dispatch_router_inter_token_latency_seconds_bucket{le="10"} 118
+dispatch_router_inter_token_latency_seconds_bucket{le="+Inf"} 118
+dispatch_router_inter_token_latency_seconds_sum 5.464371751000002
+dispatch_router_inter_token_latency_seconds_count 118
+# HELP dispatch_router_queue_depth Requests currently waiting for the single-flight model server
+# TYPE dispatch_router_queue_depth gauge
+dispatch_router_queue_depth 0
+# HELP dispatch_router_requests_total Total requests admitted by the router
+# TYPE dispatch_router_requests_total counter
+dispatch_router_requests_total 9
+# HELP dispatch_router_ttft_seconds Time to first token, seconds
+# TYPE dispatch_router_ttft_seconds histogram
+dispatch_router_ttft_seconds_bucket{le="0.005"} 0
+dispatch_router_ttft_seconds_bucket{le="0.01"} 0
+dispatch_router_ttft_seconds_bucket{le="0.025"} 0
+dispatch_router_ttft_seconds_bucket{le="0.05"} 0
+dispatch_router_ttft_seconds_bucket{le="0.1"} 0
+dispatch_router_ttft_seconds_bucket{le="0.25"} 6
+dispatch_router_ttft_seconds_bucket{le="0.5"} 6
+dispatch_router_ttft_seconds_bucket{le="1"} 7
+dispatch_router_ttft_seconds_bucket{le="2.5"} 7
+dispatch_router_ttft_seconds_bucket{le="5"} 7
+dispatch_router_ttft_seconds_bucket{le="10"} 9
+dispatch_router_ttft_seconds_bucket{le="+Inf"} 9
+dispatch_router_ttft_seconds_sum 14.428644759
+dispatch_router_ttft_seconds_count 9

@@ -18,7 +18,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import torch
-from transformers import DynamicCache
+from tokenizers import decoders, pre_tokenizers
+from transformers import DynamicCache, PreTrainedTokenizerBase
 
 from dispatch.benchmark.harness import load_model
 from dispatch.kernels.backends import resolve_backend
@@ -102,37 +103,60 @@ class KernelResponder:
                     eos_token_id=self.tokenizer.eos_token_id,
                 )
             )
-            emitted = 0
+            emitted_text = ""
             while True:
                 completed = worker.step()
                 active = worker.snapshot_active_tokens()
-                if DEMO_REQUEST_ID in active:
-                    new_ids = active[DEMO_REQUEST_ID][emitted:]
-                    for token_id in new_ids:
-                        yield TokenEvent(
-                            text=self.tokenizer.decode([token_id]),
-                            is_final=False,
-                            t_emit=time.perf_counter(),
-                        )
-                    emitted = len(active[DEMO_REQUEST_ID])
+                token_ids = active.get(DEMO_REQUEST_ID)
+                if token_ids is None and completed:
+                    token_ids = completed[0].generated_token_ids
+                if token_ids is not None:
+                    # Decoding the whole sequence and diffing against the
+                    # previous decode -- not each new token id in
+                    # isolation -- because a byte-level BPE tokenizer's
+                    # decode() only converts its internal space marker
+                    # ('Ġ') into a real space when it has surrounding
+                    # context. Found live on the real GPU session: per-
+                    # token decode produced 'TheĠquickĠbrown'
+                    # instead of 'The quick brown'.
+                    full_text = self.tokenizer.decode(token_ids)
+                    new_text = full_text[len(emitted_text) :]
+                    if new_text:
+                        yield TokenEvent(text=new_text, is_final=False, t_emit=time.perf_counter())
+                    emitted_text = full_text
                 if completed:
-                    tail = completed[0].generated_token_ids[emitted:]
-                    for token_id in tail:
-                        yield TokenEvent(
-                            text=self.tokenizer.decode([token_id]),
-                            is_final=False,
-                            t_emit=time.perf_counter(),
-                        )
                     yield TokenEvent(text="", is_final=True, t_emit=time.perf_counter())
                     return
         finally:
             self._lock.release()
 
 
+# deepseek-ai/deepseek-moe-16b-base ships a tokenizer.json whose vocab is
+# majority GPT-2-style byte-level BPE (47,723 of 100,000 entries carry the
+# 'Ġ' space marker) but is wired to a SentencePiece Metaspace
+# pre-tokenizer/decoder pair (expects '▁', which appears in zero vocab
+# entries). Found live on this GPU session: encode() glues words together
+# with no space markers at all ("The quick brown fox" -> a token stream
+# indistinguishable from "Thequickbrownfox"), and decode() then either
+# drops spaces silently or leaks a literal 'Ġ'/'Ċ' glyph, depending on
+# which vocab entries the greedy path happens to hit. This is a defect in
+# the model's own shipped tokenizer file, not in transformers or dispatch
+# -- Phases 0-6 never noticed because they only ever compared logits/token
+# ids, never decoded text for a human to read. Rewiring both the
+# pre-tokenizer and decoder to ByteLevel (matching what the vocab actually
+# is) round-trips exactly: encode(decode(ids)) == ids, verified against
+# several multi-word prompts.
+def fix_tokenizer_byte_level(tokenizer: PreTrainedTokenizerBase) -> None:
+    backend = tokenizer.backend_tokenizer
+    backend.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False, use_regex=True)
+    backend.decoder = decoders.ByteLevel()
+
+
 def build_kernel_responder(*, moe_kernel: str = "naive") -> KernelResponder:
     model, tokenizer = load_model(
         MODEL_NAME, device="cuda", dtype=torch.bfloat16, trust_remote_code=True
     )
+    fix_tokenizer_byte_level(tokenizer)
     fix_rope_inv_freq(model)
     patched = patch_moe_infer(model, resolve_backend(moe_kernel))
     if patched == 0:

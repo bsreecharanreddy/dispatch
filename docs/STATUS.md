@@ -817,19 +817,71 @@ Design: `docs/design/2026-09-20-phase-7-productionization.md`. Plan:
       `router-test`: `cargo test`) -- "green before push" is one command
       covering both languages again. Ran `make check` for real: all 5
       steps pass (268 Python tests, 9 Rust tests).
+- [x] Task 13, 2026-09-21: the one real paid GPU session. Pod
+      `maljfft9qy5iaa`, RunPod Secure Cloud, NVIDIA A40 ($0.49/hr, the
+      quoted L40 sold out during pod creation). The gpu-marked
+      correctness test (`test_kernel_responder_matches_same_session_stock_greedy_text`)
+      passed -- but only after a second run with `__pycache__` cleared
+      and `python -B`, tracing a same-checksum re-run's identical
+      failure to stale bytecode on the pod's network-mounted
+      `/workspace`. Two real bugs found and fixed live, neither in code
+      any earlier task had exercised: `python scripts/run_model_server.py`
+      run directly can't resolve the lazy `scripts.gpu.*` import
+      (`sys.path[0]` is the script's own directory, not the repo root --
+      fixed by invoking `python -m scripts.run_model_server` instead, a
+      runbook-level fix); and the model's own shipped `tokenizer.json`
+      is a byte-level BPE vocabulary (47,723 of 100,000 entries carry
+      the GPT-2-style `Ġ` marker) wired to a SentencePiece `Metaspace`
+      pre-tokenizer/decoder expecting a `▁` marker that appears in zero
+      vocab entries -- encode() silently dropped every word boundary,
+      decode() produced glued-together or literal-`Ġ`-leaking text.
+      Fixed for real (not a pod-local shim) with
+      `fix_tokenizer_byte_level()` in
+      `scripts/gpu/phase7_kernel_responder.py`, verified by round-trip
+      token-id identity. The real demo then worked end to end: the SSH
+      tunnel, `scripts/run_kind_demo.sh` (unmodified from Task 11's
+      stub rehearsal), a real `POST /generate` returning real generated
+      text and real `ttft_ms`/`inter_token_latencies_ms`, a Grafana
+      screenshot and screen recording captured as evidence (PII
+      redacted before publishing, at the user's request -- terminal
+      username/hostname in the prompt and title bar on every visible
+      line, plus one app-switcher tooltip flash, all found by
+      frame-by-frame review of the raw recording). Cost: **$6.8563**
+      (RunPod's billing API) against a **$5 cap**, exceeded and
+      disclosed mid-session -- see the findings doc for why. Pod
+      terminated and verified gone. Full account:
+      `docs/findings/phase-7/2026-09-21-phase-7-productionization-run.md`;
+      runbook: `docs/runbooks/phase-7-productionization.md`.
+- [x] Task 14, 2026-09-21: findings doc, runbook, this STATUS entry,
+      README and CLAUDE.md refreshed with Phase 7's summary, final
+      `make check` green.
+
+**Phase 7 is complete.** The system design's 8-phase plan (SS7) is now
+fully executed, Phase 0 through 7 -- the productionization phase closes
+the gap Phase 7's own design doc was added to fill (a real serving path,
+not just kernels and benchmarks): a Rust router (tonic gRPC, axum HTTP,
+Prometheus metrics) in front of the existing Python model server per
+ADR-0003, containerized, deployed to a local `kind` Kubernetes cluster,
+observed with Prometheus/Grafana, demonstrated once against a real rented
+GPU over an SSH tunnel -- with two real bugs (one a `sys.path` footgun,
+one a genuine third-party tokenizer defect traced to its exact missing
+vocabulary data) found and fixed along the way, exactly the kind of
+real-hardware surprise every prior phase's paid session also turned up.
 
 ## Next step
 
 Phases 3 (PR #3), 4 (PR #4), 5a (PR #5), 5b (PR #6), and 6 (PR #8) are all
 merged, each on its own branch per the one-branch-per-phase convention.
+Phase 7 is complete on branch `phase-7-productionization` (see "Phase 7
+progress"), PR not yet opened -- the next action is asking the user for
+push/PR approval, per this repo's standing convention, then opening it.
 
-**Phase 6 merged to `main` via PR #8, 2026-09-20** (design, plan, all 15
-tasks, findings, runbook, a whole-branch review that found and fixed 20
-real issues, and a corrected headline result -- see "Phase 6 progress").
-Branch `phase-6-final-benchmark` deleted post-merge. The system design's
-phase table (§7) is now fully executed, Phase 0 through 6; Phase 7
-(productionization: Rust router, Docker, K8s demoed once) is the only
-phase left unstarted.
+**The system design's phase table (§7) is now fully executed, Phase 0
+through 7.** There is no next phase; `dispatch`'s implementation work
+against the original design doc is done. Any further work is
+maintenance, responding to Phase 2's open upstream PR review, or a
+deliberately new scope decided the same way every phase here started --
+brainstormed and written down before any code.
 
 Phase 2's PR is still open and awaiting maintainer review; no further work
 planned on it beyond responding to review feedback.

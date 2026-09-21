@@ -57,3 +57,7 @@ graphify-out/
 
 # Rust
 /router/target/
+
+# Playwright MCP browser-automation scratch output (page snapshots,
+# console logs) -- tool-generated, not project content.
+.playwright-mcp/
