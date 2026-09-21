@@ -22,24 +22,38 @@ result was a null or a mixed one, it's reported that way.
 
 ---
 
-> **Status:** Phases 0-6 merged to `main` across seven PRs
+> **Status:** All 8 phases (0-7) merged to `main` across eight PRs
 > ([#1](https://github.com/bsreecharanreddy/dispatch/pull/1) Phase 0,
 > [#2](https://github.com/bsreecharanreddy/dispatch/pull/2) Phase 1,
 > [#3](https://github.com/bsreecharanreddy/dispatch/pull/3) Phases 2-3,
 > [#4](https://github.com/bsreecharanreddy/dispatch/pull/4) Phase 4,
 > [#5](https://github.com/bsreecharanreddy/dispatch/pull/5) Phase 5a,
 > [#6](https://github.com/bsreecharanreddy/dispatch/pull/6) Phase 5b,
-> [#8](https://github.com/bsreecharanreddy/dispatch/pull/8) Phase 6) —
+> [#8](https://github.com/bsreecharanreddy/dispatch/pull/8) Phase 6,
+> [#9](https://github.com/bsreecharanreddy/dispatch/pull/9) Phase 7) —
 > Phase 2 landed as docs only, its actual contribution being the
-> upstreamed vLLM PR below, not a dispatch-repo code change. **Phase 7
-> (productionization) is complete**, PR pending: a real Rust router in
-> front of the Python model server, containerized, deployed to a local
-> Kubernetes cluster, demonstrated once against a real rented GPU over an
-> SSH tunnel — see [below](#phase-7-seeing-it-run). **This closes the
-> system design's entire phase plan, Phase 0 through 7.** Full
-> task-by-task record: [`docs/STATUS.md`](docs/STATUS.md). Design and
-> phasing:
+> upstreamed vLLM PR below, not a dispatch-repo code change. **This
+> closes the system design's entire 8-phase plan.** Phase 7
+> (productionization) added a real Rust router in front of the Python
+> model server, containerized, deployed to a local Kubernetes cluster,
+> demonstrated once against a real rented GPU over an SSH tunnel — see
+> [below](#phase-7-seeing-it-run). Every phase has its own git tag
+> (`phase-0` through `phase-7`); `v1.0.0` marks this completed state.
+> Full task-by-task record: [`docs/STATUS.md`](docs/STATUS.md); phase
+> history: [`CHANGELOG.md`](CHANGELOG.md). Design and phasing:
 > [`docs/design/2026-09-14-dispatch-system-design.md`](docs/design/2026-09-14-dispatch-system-design.md).
+
+**Jump to a section by interest:**
+
+| If you care about... | Start here |
+|---|---|
+| Inference / GPU-kernel engineering | [Phase 1 kernel](src/dispatch/kernels/grouped_gemm.py) + [findings](docs/findings/phase-1/2026-09-15-phase-1-grouped-gemm-run.md) |
+| Multi-GPU / distributed serving | [Phase 3](docs/findings/phase-3/2026-09-16-phase-3-multi-gpu-ep-run.md) + [Phase 4](docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md) findings |
+| Production serving / platform engineering | [Phase 7: seeing it run](#phase-7-seeing-it-run) |
+| The vLLM/SGLang head-to-head | [Phase 6 findings](docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md) |
+| Whether the claims actually hold up | [`docs/STATUS.md`](docs/STATUS.md) + [`docs/findings/`](docs/findings/) |
+
+(Full breakdown, one line per audience: [Who should look at what](#who-should-look-at-what).)
 
 ## In sixty seconds
 
@@ -50,9 +64,10 @@ DeepEP library, and a disaggregated prefill/decode scheduler — each phase's
 thesis stated up front and reported honestly, including the phases where
 the answer was a null or mixed result.
 
-**Built solo, start to finish** — design docs, the kernel, the multi-GPU
-serving path, an upstreamed open-source benchmark contribution, every
-rented-GPU session, and the write-ups of what broke along the way.
+**Built entirely solo** — every Triton kernel, the multi-GPU serving path,
+the Rust router, the Kubernetes manifests, an upstreamed open-source
+benchmark contribution, every rented-GPU session, and every write-up of
+what broke along the way, start to finish, no team.
 
 **Measured across eleven rented-GPU sessions (nine phases), $51.35 total,
 every phase within its stated cap except Phase 5b (its original $10 cap
@@ -88,9 +103,13 @@ defect — the model's shipped vocabulary is byte-level BPE but wired to
 the wrong pre-tokenizer/decoder pair — found, root-caused, and fixed
 (Phase 7).
 
-**262 tests, `make check` green throughout Phase 6** (lint, `mypy --strict`,
-and the full non-GPU suite) — GPU-dependent tests are marked and excluded
-from CI by design, then run for real on rented hardware every phase.
+**277 tests** (268 Python + 9 Rust), `make check` green throughout —
+lint, `mypy --strict`, the Rust router's own `fmt`/`clippy`/`test` gate,
+and the full non-GPU suite. **86% coverage on CPU-testable logic**
+(`pytest --cov`; the kernels themselves are GPU-only and covered by the
+`gpu`-marked correctness suite instead, not by this number).
+GPU-dependent tests are marked and excluded from CI by design, then run
+for real on rented hardware every phase.
 
 ## Why this project
 
@@ -289,6 +308,10 @@ They're run for real on rented hardware every phase; each phase's findings
 doc in [`docs/findings/`](docs/findings/) records exactly which GPU, for
 how long, and at what cost.
 
+The full testing policy, conventions, and cost discipline this project
+follows: [`CONTRIBUTING.md`](CONTRIBUTING.md). Phase-by-phase history,
+one entry per release: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## Design and the paper trail
 
 [`docs/design/2026-09-14-dispatch-system-design.md`](docs/design/2026-09-14-dispatch-system-design.md)
@@ -315,6 +338,12 @@ is the authoritative architecture, phasing, and scope document.
   [Phase 4's](docs/findings/phase-4/2026-09-17-phase-4-disaggregated-prefill-decode-run.md)
   findings docs for two results — one null, one mixed — found by measuring
   on real hardware rather than assumed.
+- **Production serving / platform engineering** — `router/` (the Rust
+  gRPC/HTTP router) and `k8s/`, then
+  [Phase 7's findings doc](docs/findings/phase-7/2026-09-21-phase-7-productionization-run.md):
+  a real router in front of a real GPU-backed model server, containerized
+  and deployed to Kubernetes, including a genuine tokenizer bug found and
+  fixed on the one real demo run.
 - **ML infra / open-source contribution** —
   [Phase 2's findings doc](docs/findings/phase-2/2026-09-15-phase-2-vllm-benchmark-run.md)
   and the open [vLLM PR](https://github.com/vllm-project/vllm/pull/57100): a

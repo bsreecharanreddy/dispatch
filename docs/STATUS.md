@@ -870,11 +870,10 @@ real-hardware surprise every prior phase's paid session also turned up.
 
 ## Next step
 
-Phases 3 (PR #3), 4 (PR #4), 5a (PR #5), 5b (PR #6), and 6 (PR #8) are all
-merged, each on its own branch per the one-branch-per-phase convention.
-Phase 7 is complete on branch `phase-7-productionization` (see "Phase 7
-progress"), PR not yet opened -- the next action is asking the user for
-push/PR approval, per this repo's standing convention, then opening it.
+All nine measured phases (0, 1, 2, 3, 4, 5a, 5b, 6, 7) are merged to
+`main` across PRs #1-#6, #8, and #9, each on its own branch per the
+one-branch-per-phase convention. Phase 7 merged 2026-09-21 via
+[#9](https://github.com/bsreecharanreddy/dispatch/pull/9).
 
 **The system design's phase table (§7) is now fully executed, Phase 0
 through 7.** There is no next phase; `dispatch`'s implementation work
@@ -885,3 +884,16 @@ brainstormed and written down before any code.
 
 Phase 2's PR is still open and awaiting maintainer review; no further work
 planned on it beyond responding to review feedback.
+
+**Post-completion portfolio polish, 2026-09-21:** repo made public;
+annotated git tags added for `phase-0` through `phase-7` (at each PR's
+merge commit) and `v1.0.0` (the completed 8-phase state, same commit as
+`phase-7`); GitHub repo topics set; `CHANGELOG.md` restructured from a
+single running "Unreleased" section into one dated version heading per
+tag, with Phase 7's entry added (it had been missing); `CONTRIBUTING.md`
+added (testing policy, conventions, cost discipline, lifted from this
+file for a reader who wants the short version); README given a top-of-file
+scan table, an explicit "built entirely solo" line, current test/coverage
+numbers (277 tests: 268 Python + 9 Rust; 86% coverage on CPU-testable
+logic), and a Phase 7 entry in "Who should look at what" (previously
+missing). No code changed; `make check` green throughout.

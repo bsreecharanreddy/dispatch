@@ -209,9 +209,10 @@ duration. Full account:
 `docs/findings/phase-6/2026-09-20-phase-6-final-benchmark-run.md`; runbook:
 `docs/runbooks/phase-6-final-benchmark.md`.
 
-**Phase 7 (productionization) is complete, 2026-09-21**, on branch
-`phase-7-productionization`, PR not yet opened. **This closes the system
-design's entire 8-phase plan, Phase 0 through 7.** A Rust router (tonic
+**Phase 7 (productionization) is complete, 2026-09-21**, merged to `main`
+via [PR #9](https://github.com/bsreecharanreddy/dispatch/pull/9). **This
+closes the system design's entire 8-phase plan, Phase 0 through 7.** A
+Rust router (tonic
 gRPC client, axum HTTP, Prometheus metrics) in front of the existing
 Python model server, per ADR-0003's TGI-shaped split, containerized
 (Docker multi-stage builds), deployed to a local `kind` Kubernetes
